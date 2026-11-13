@@ -1,0 +1,7 @@
+[2026-10-22 14:10] sameer.kulkarni: Pingwire quote came back. Annual contract is ₹3,18,400 with a 12-month lock-in (ref PW-CONTRACT-7731). Divya, OK to sign?
+[2026-10-22 14:25] divya.menon: Yes, sign. Make sure the renewal date is in the calendar.
+[2026-10-23 09:40] sameer.kulkarni: Signed. Renewal date is 31 Mar 2027. Nobody has been assigned to renegotiate it yet.
+[2026-11-04 16:00] sameer.kulkarni: Runway update from the founders: 7.4 months at current burn. Do not share outside this channel.
+[2026-11-04 16:05] sameer.kulkarni: Infra cap drops to ₹24,750 per month from 1 Dec. The dev team has not been told yet. Divya will announce it after the board call.
+[2026-11-04 16:07] divya.menon: Understood. I'll tell the team on the 16th.
+[2026-11-09 10:20] sameer.kulkarni: Managed Postgres will cost ₹19,200 a month after the next upgrade, which leaves very little for anything else under the cap.

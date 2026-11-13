@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baton design reference</title>
+<link rel="stylesheet" href="../static/baton.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="wordmark" href="#">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 0H14L0 14Z" fill="#151512"/><path d="M13.5 .5V13.5H.5Z" fill="none" stroke="#151512"/></svg>
+      Baton
+    </a>
+    <div class="casename"><b>Dispatch notifications</b> &nbsp;Meera Joshi to Arjun Rao &nbsp;&middot;&nbsp; Meera leaves in 14 days</div>
+    <div class="spacer"></div>
+    <div class="persona" role="radiogroup" aria-label="Viewing as">
+      <button role="radio" aria-checked="false">Leaver</button>
+      <button role="radio" aria-checked="true">Approver</button>
+      <button role="radio" aria-checked="false">Successor</button>
+    </div>
+    <div class="notauth">Role switch for the demo. Not authentication.</div>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding-top:var(--s6);padding-bottom:var(--s16)">
+
+  <nav class="tabs" aria-label="Case">
+    <a href="#">Sources <span class="num">5</span></a>
+    <a href="#" aria-current="page">Claims <span class="num">47</span></a>
+    <a href="#">Gaps <span class="num">4</span></a>
+    <a href="#">Conflicts <span class="num">2</span></a>
+    <a href="#">Timeline</a>
+    <a href="#">Handover <span class="num">v1</span></a>
+    <a href="#">Approvals <span class="num">1</span></a>
+    <a href="#">Trust</a>
+  </nav>
+
+  <div class="main-with-drawer">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s6);margin:var(--s6) 0 var(--s4);flex-wrap:wrap">
+      <div>
+        <h1 class="h1">Claims</h1>
+        <p class="meta" style="margin:var(--s1) 0 0">Every claim shows how we know it. Nothing here is shared until the approver approves it.</p>
+      </div>
+      <div class="legend" aria-label="How to read the bar on the left of each claim">
+        <span class="basis basis--sourced"><span class="swatch swatch--sourced"></span>Sourced</span>
+        <span class="basis basis--attested"><span class="swatch swatch--attested"></span>Attested</span>
+        <span class="basis basis--inferred"><span class="swatch swatch--inferred"></span>Inferred</span>
+        <span class="basis basis--conflict"><span class="swatch swatch--conflict"></span>Conflict</span>
+        <span class="basis basis--unknown"><span class="swatch swatch--unknown"></span>Unknown</span>
+      </div>
+    </div>
+
+    <div class="filters" role="group" aria-label="Filter claims" style="margin-bottom:var(--s4)">
+      <button class="filter" aria-pressed="true">All <span class="num">47</span></button>
+      <button class="filter" aria-pressed="false">Needs review <span class="num">9</span></button>
+      <button class="filter" aria-pressed="false">Decision <span class="num">10</span></button>
+      <button class="filter" aria-pressed="false">Owner <span class="num">6</span></button>
+      <button class="filter" aria-pressed="false">Risk <span class="num">6</span></button>
+      <button class="filter" aria-pressed="false">Dependency <span class="num">2</span></button>
+      <button class="filter" aria-pressed="false">Open question <span class="num">2</span></button>
+      <button class="filter" aria-pressed="false">Next action <span class="num">4</span></button>
+    </div>
+
+    <div class="ledger" role="list">
+
+      <!-- Sourced, approved, selected (drawer is open on it) -->
+      <article class="claim claim--sourced" role="listitem" aria-selected="true">
+        <span class="type">Decision</span>
+        <div>
+          <p class="text">SMS moved from Textly to Pingwire on 21 Oct, because Textly took 9 days to approve one template and Pingwire took 1 day.</p>
+          <div class="rowfoot">
+            <span class="basis basis--sourced">Sourced</span>
+            <span class="tag">Team</span>
+            <span class="status status--approved">Approved</span>
+            <span class="cites">
+              <a class="cite" href="#" aria-expanded="true">C1&middot;026</a>
+              <a class="cite" href="#">N1&middot;014</a>
+              <a class="cite" href="#">C1&middot;015</a>
+            </span>
+            <span class="acts"><button class="btn btn--quiet">Edit</button><button class="btn btn--quiet">Reject</button></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Superseded -->
+      <article class="claim claim--sourced claim--superseded" role="listitem">
+        <span class="type">Decision</span>
+        <div>
+          <p class="text">Textly was chosen as the SMS vendor on 9 Sep.</p>
+          <p class="note">Superseded on 21 Oct by the decision above. Shown for history; not a current decision.</p>
+          <div class="rowfoot">
+            <span class="basis basis--sourced">Sourced</span>
+            <span class="tag">Team</span>
+            <span class="status status--approved">Approved</span>
+            <span class="cites"><a class="cite" href="#">C1&middot;008</a></span>
+            <span class="acts"><button class="btn btn--quiet">Edit</button><button class="btn btn--quiet">Reject</button></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Conflict, pending -->
+      <article class="claim claim--conflict" role="listitem">
+        <span class="type">Decision</span>
+        <div>
+          <p class="text">The pilot launch date disagrees: chat says 28 Nov, the task board says 5 Dec. No source says the date moved.</p>
+          <p class="note">Both dates are kept. Baton does not pick one. The approver decides.</p>
+          <div class="rowfoot">
+            <span class="basis basis--conflict">Conflict</span>
+            <span class="tag">Team</span>
+            <span class="status status--pending">Pending</span>
+            <span class="cites">
+              <a class="cite" href="#">C1&middot;032</a>
+              <a class="cite" href="#">T1&middot;013</a>
+            </span>
+            <span class="acts"><button class="btn btn--primary">Approve</button><button class="btn btn--quiet">Edit</button><button class="btn btn--danger">Reject</button></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Inferred, pending -->
+      <article class="claim claim--inferred" role="listitem">
+        <span class="type">Risk</span>
+        <div>
+          <p class="text">The reconcile job will probably fail again on Monday 7 Dec, after Meera has left.</p>
+          <p class="note">A guess. No source line says this. It follows from the first-Monday pattern.</p>
+          <div class="rowfoot">
+            <span class="basis basis--inferred">Inferred</span>
+            <span class="tag">Team</span>
+            <span class="status status--pending">Pending</span>
+            <span class="acts"><button class="btn btn--primary">Approve</button><button class="btn btn--quiet">Edit</button><button class="btn btn--danger">Reject</button></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Attested, edited and locked -->
+      <article class="claim claim--attested" role="listitem">
+        <span class="type">Dependency</span>
+        <div>
+          <p class="text">Pingwire dashboard users are added by Divya Menon from the admin console.</p>
+          <p class="note">Meera Joshi, 13 Nov 14:02: &ldquo;Divya can add users. Ask in the channel, not by email.&rdquo; No source line exists.</p>
+          <div class="rowfoot">
+            <span class="basis basis--attested">Attested</span>
+            <span class="tag">Team</span>
+            <span class="status status--edited">Edited</span>
+            <span class="acts"><button class="btn btn--quiet">Edit</button><button class="btn btn--quiet">Reject</button></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Rejected -->
+      <article class="claim claim--sourced claim--rejected" role="listitem">
+        <span class="type">Owner</span>
+        <div>
+          <p class="text">Sameer Kulkarni owns the notification service.</p>
+          <p class="note">Rejected by Divya Menon, 13 Nov 12:31. Stays rejected when sources are processed again.</p>
+          <div class="rowfoot">
+            <span class="basis basis--sourced">Sourced</span>
+            <span class="tag">Team</span>
+            <span class="status status--rejected">Rejected</span>
+            <span class="acts"><button class="btn btn--quiet">Restore</button></span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Restricted, as the approver sees it (full content, filled tag) -->
+      <article class="claim claim--sourced" role="listitem">
+        <span class="type">Decision</span>
+        <div>
+          <p class="text">The infra cap drops to the lower monthly figure from 1 Dec. The dev team has not been told.</p>
+          <div class="rowfoot">
+            <span class="basis basis--sourced">Sourced</span>
+            <span class="tag tag--restricted">Finance</span>
+            <span class="status status--pending">Pending</span>
+            <span class="cites"><a class="cite" href="#">F1&middot;005</a></span>
+            <span class="acts"><button class="btn btn--primary">Approve</button><button class="btn btn--quiet">Edit</button><button class="btn btn--danger">Reject</button></span>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <p class="kbdhint"><kbd>J</kbd> <kbd>K</kbd> move &nbsp; <kbd>A</kbd> approve &nbsp; <kbd>E</kbd> edit &nbsp; <kbd>R</kbd> reject &nbsp; <kbd>Enter</kbd> open source</p>
+
+    <hr class="rule" style="margin:var(--s12) 0 var(--s6)">
+
+    <!-- ===== The same list, as the Successor sees it ===== -->
+    <h2 class="h2">The same list, viewed as Successor</h2>
+    <p class="meta" style="margin:var(--s1) 0 var(--s4)">The server drew these bars. The text behind them was never sent.</p>
+    <div class="ledger">
+      <article class="claim claim--sourced" role="listitem">
+        <span class="type">Risk</span>
+        <div>
+          <p class="text">The nightly reconcile job fails on the first Monday of each month. Workaround: rerun with <span class="mono">--wait-for-file 90</span>.</p>
+          <div class="rowfoot">
+            <span class="basis basis--sourced">Sourced</span>
+            <span class="tag">Team</span>
+            <span class="status status--approved">Approved</span>
+            <span class="cites"><a class="cite" href="#">C1&middot;019</a><a class="cite" href="#">N1&middot;024</a></span>
+          </div>
+        </div>
+      </article>
+      <article class="claim claim--redacted" role="listitem">
+        <span class="type">&nbsp;</span>
+        <div><div class="redact redact--a" role="img" aria-label="Item outside your clearance">Restricted</div></div>
+      </article>
+      <article class="claim claim--redacted" role="listitem">
+        <span class="type">&nbsp;</span>
+        <div><div class="redact redact--c" role="img" aria-label="Item outside your clearance">Restricted</div></div>
+      </article>
+    </div>
+    <p class="meta" style="margin-top:var(--s3)">3 items are outside your clearance. Ask the approver, Divya Menon.</p>
+
+    <hr class="rule" style="margin:var(--s12) 0 var(--s6)">
+
+    <!-- ===== Handover document (serif) ===== -->
+    <h2 class="h2" style="margin-bottom:var(--s4)">Handover document, Successor view</h2>
+    <div class="doc">
+      <h2>Who owns what</h2>
+      <p class="item">Arjun Rao takes over the notify/ package and the reconcile job from 9 Nov. <a class="cite" href="#">N1&middot;023</a><a class="cite" href="#">C1&middot;038</a></p>
+      <p class="item">Divya Menon owns production deploys and access grants. <a class="cite" href="#">N1&middot;007</a></p>
+      <h2>What is at risk</h2>
+      <p class="item item--conflict">The pilot launch date is 28 Nov in chat and 5 Dec on the task board. Nobody has said which is right. <span class="basis basis--conflict">Conflict</span> <a class="cite" href="#">C1&middot;032</a><a class="cite" href="#">T1&middot;013</a></p>
+      <div class="item item--redacted"><div class="redact redact--b" role="img" aria-label="Item outside your clearance">Restricted</div></div>
+      <p class="item item--inferred">The reconcile job will probably fail again on 7 Dec. <span class="basis basis--inferred">Inferred</span></p>
+      <p class="aside">Approved by Divya Menon, version 1, 13 Nov 12:40.</p>
+    </div>
+
+    <div class="wire" style="margin-top:var(--s8)">
+      <span class="label">Wire check</span>
+      <span>This response was scanned for <strong>9</strong> planted strings: <strong>0</strong> present.</span>
+      <span>Role: Successor &middot; clearance: team</span>
+    </div>
+
+    <hr class="rule" style="margin:var(--s12) 0 var(--s6)">
+
+    <!-- ===== Trust counters ===== -->
+    <h2 class="h2" style="margin-bottom:var(--s4)">Trust page, leak test result</h2>
+    <div class="cols">
+      <div>
+        <div class="counter">0</div>
+        <div class="counter-label">Planted strings found in views the role may not see</div>
+        <p class="meta" style="margin-top:var(--s2)">4 roles &times; 9 views &times; 9 strings checked. A strong check, not a proof.</p>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Measure</th><th class="num">Result</th></tr></thead>
+        <tbody>
+          <tr><td>Recall against the answer key</td><td class="num">31 of 37</td></tr>
+          <tr><td>Claims matching a key fact</td><td class="num">34 of 41</td></tr>
+          <tr><td>Citations that resolve to a real line</td><td class="num">100%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="meta" style="margin-top:var(--s6)">Numbers on this reference page are placeholders to show layout. The app computes the real ones.</p>
+  </div>
+
+  <!-- Source drawer (fixed, right). Real source lines, cited line marked -->
+  <aside class="drawer" aria-label="Source">
+    <header>
+      <div><div class="file">chat_team.txt</div><div class="meta">Source C1 &middot; cited by 1 claim</div></div>
+      <div style="display:flex;gap:var(--s2);align-items:center"><span class="tag">Team</span><button class="btn btn--quiet" style="height:28px">Close</button></div>
+    </header>
+    <div>
+      <div class="srcline"><div class="n">024</div><div class="t">[2026-10-14 11:00] divya.menon: Staging SSH access goes through me. Ask in this channel and I'll add your key. Don't email keys around.</div></div>
+      <div class="srcline"><div class="n">025</div><div class="t">[2026-10-19 16:40] meera.joshi: Pingwire trial results: DLT template approved in 1 day through their pre-approved route. The delivery report is cleaner too.</div></div>
+      <div class="srcline srcline--cited"><div class="n">026</div><div class="t">[2026-10-21 12:30] divya.menon: Per the sprint review: we are dropping Textly and moving SMS to Pingwire. Meera, please migrate the notifier.</div></div>
+      <div class="srcline"><div class="n">027</div><div class="t">[2026-10-21 12:33] meera.joshi: On it. I'll keep the Textly adapter in the repo for a month in case we have to roll back.</div></div>
+      <div class="srcline"><div class="n">028</div><div class="t">[2026-10-24 18:10] meera.joshi: Pingwire adapter merged. order_received and order_ready templates are approved. order_delayed is pending with the telecom operator, they said 10-14 days.</div></div>
+    </div>
+    <footer class="meta">Line IDs are fixed when the file is read: <span class="mono">C1&middot;026</span> always means this line.</footer>
+  </aside>
+</main>
+</body>
+</html>

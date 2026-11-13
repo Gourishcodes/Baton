@@ -1,0 +1,43 @@
+{
+  "note": "tasks.csv -> rerun/tasks_v2.csv. Claims citing a changed line must be flagged stale after approval; added rows may create new claims; the gap on T-09 should close when its owner appears.",
+  "changed_lines": [
+    {
+      "line_id": "T1:006",
+      "before": "id=T-09 | title=Delivery report screen in staff app | status=Todo | priority=P2 | created=2026-10-12 | updated=2026-10-12 | due=2026-11-20 | labels=staff-app | notes=Needs the Pingwire report format",
+      "after": "id=T-09 | title=Delivery report screen in staff app | assignee=arjun.rao | status=Todo | priority=P2 | created=2026-10-12 | updated=2026-11-13 | due=2026-11-20 | labels=staff-app | notes=Needs the Pingwire report format"
+    },
+    {
+      "line_id": "T1:007",
+      "before": "id=T-11 | title=order_delayed template approval (Pingwire / operator) | assignee=meera.joshi | status=Blocked | priority=P1 | created=2026-10-24 | updated=2026-11-08 | due=2026-11-14 | labels=notify;dlt | notes=Waiting on the telecom operator",
+      "after": "id=T-11 | title=order_delayed template approval (Pingwire / operator) | assignee=meera.joshi | status=Done | priority=P1 | created=2026-10-24 | updated=2026-11-13 | due=2026-11-14 | labels=notify;dlt | notes=Approved by the telecom operator"
+    },
+    {
+      "line_id": "T1:009",
+      "before": "id=T-14 | title=Dashboard export (CSV) on branch feat/export-v2 | assignee=meera.joshi | status=In progress | priority=P2 | created=2026-10-31 | updated=2026-11-09 | due=2026-11-18 | labels=export | notes=Migration 0007 not applied on staging",
+      "after": "id=T-14 | title=Dashboard export (CSV) on branch feat/export-v2 | assignee=meera.joshi | status=Blocked | priority=P2 | created=2026-10-31 | updated=2026-11-13 | due=2026-11-18 | labels=export | notes=Migration 0007 not applied on staging"
+    }
+  ],
+  "added_lines": [
+    {
+      "line_id": "T1:015",
+      "text": "id=T-22 | title=Add the reconcile workaround to the job itself | assignee=arjun.rao | status=Todo | priority=P2 | created=2026-11-13 | updated=2026-11-13 | due=2026-11-25 | labels=ops"
+    }
+  ],
+  "removed_lines": [],
+  "key_facts_citing_changed_lines": [
+    "R03",
+    "R04",
+    "GP03"
+  ],
+  "expected_behaviour": {
+    "stale": [
+      "R03",
+      "R04",
+      "GP03"
+    ],
+    "gap_closed": [
+      "GP03"
+    ],
+    "sticky": "Reject R03 before the re-run: after re-running on tasks_v2.csv it must stay rejected or show as possibly previously rejected, never silently reappear as pending."
+  }
+}

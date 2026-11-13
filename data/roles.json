@@ -1,0 +1,73 @@
+{
+  "roles": {
+    "leaver": {
+      "display": "Leaver - Meera Joshi",
+      "holds": [
+        "team"
+      ]
+    },
+    "successor": {
+      "display": "Successor - Arjun Rao",
+      "holds": [
+        "team"
+      ]
+    },
+    "lead": {
+      "display": "Approver - Divya Menon",
+      "holds": [
+        "team",
+        "finance",
+        "hr"
+      ]
+    },
+    "finance_ops": {
+      "display": "Finance ops - Sameer Kulkarni (optional third view)",
+      "holds": [
+        "team",
+        "finance"
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "C1",
+      "file": "chat_team.txt",
+      "kind": "chat",
+      "labels": [
+        "team"
+      ]
+    },
+    {
+      "id": "T1",
+      "file": "tasks.csv",
+      "kind": "csv",
+      "labels": [
+        "team"
+      ]
+    },
+    {
+      "id": "N1",
+      "file": "notes_team.md",
+      "kind": "md",
+      "labels": [
+        "team"
+      ]
+    },
+    {
+      "id": "F1",
+      "file": "chat_finance.txt",
+      "kind": "chat",
+      "labels": [
+        "finance"
+      ]
+    },
+    {
+      "id": "H1",
+      "file": "notes_hr.md",
+      "kind": "md",
+      "labels": [
+        "hr"
+      ]
+    }
+  ]
+}
