@@ -1,0 +1,219 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "The stack is FastAPI and managed Postgres 15.",
+      "subject": "Stack",
+      "attribute": "stack",
+      "value": "FastAPI + Postgres 15",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:004",
+        "C1:006",
+        "N1:004"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Meera Joshi owns the notification service.",
+      "subject": "Notification service",
+      "attribute": "owner",
+      "value": "Meera Joshi",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:004",
+        "N1:005"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Arjun Rao takes over the notification service and reconcile job from Meera Joshi.",
+      "subject": "Notification service",
+      "attribute": "owner",
+      "value": "Arjun Rao",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "Notification service",
+        "attribute": "owner",
+        "old_value": "Meera Joshi"
+      },
+      "cites": [
+        "C1:038",
+        "N1:023"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "SMS provider is Pingwire.",
+      "subject": "SMS provider",
+      "attribute": "vendor",
+      "value": "Pingwire",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "SMS provider",
+        "attribute": "vendor",
+        "old_value": "Textly"
+      },
+      "cites": [
+        "C1:026",
+        "N1:014"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Max 3 messages per order (received, ready, delayed). No marketing messages.",
+      "subject": "SMS policy",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:013",
+        "C1:014"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Monthly budget for hosting and managed Postgres is ₹41,500.",
+      "subject": "Hosting budget",
+      "attribute": "budget_monthly",
+      "value": "41500",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:021"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "English only for templates in v1.",
+      "subject": "Language support",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:031"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Reconcile job fails on the first Monday of the month due to late settlement file delivery.",
+      "subject": "Reconcile job",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": true,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:017",
+        "C1:019",
+        "C1:034",
+        "N1:024"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Rerun reconcile job with --wait-for-file 90 when it fails.",
+      "subject": "Reconcile job",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": true,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:017",
+        "C1:034",
+        "N1:024"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya Menon owns production deploys and access grants.",
+      "subject": "Access grants",
+      "attribute": "approver",
+      "value": "Divya Menon",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:024",
+        "N1:007"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Rotate Pingwire API key.",
+      "subject": "Pingwire API key",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": "2026-11-27",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:025",
+        "T1:011"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "What is the definition of 'option B' for the retry queue?",
+      "why": "The line refers to an option without describing it.",
+      "cites": [
+        "N1:019"
+      ]
+    },
+    {
+      "question": "Who will cover on-call after 2026-11-27?",
+      "why": "The role is currently unassigned.",
+      "cites": [
+        "N1:028",
+        "C1:048",
+        "C1:049"
+      ]
+    }
+  ]
+}

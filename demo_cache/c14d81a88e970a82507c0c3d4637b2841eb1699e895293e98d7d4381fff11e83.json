@@ -1,0 +1,112 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Pingwire annual contract signed for ₹3,18,400 with 12-month lock-in.",
+      "subject": "Pingwire",
+      "attribute": "vendor",
+      "value": "Pingwire",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:001",
+        "F1:002",
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Pingwire contract renewal date set for 31 Mar 2027.",
+      "subject": "Pingwire",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Infrastructure monthly budget cap set to ₹24,750 effective 1 Dec 2026.",
+      "subject": "Infrastructure",
+      "attribute": "budget_monthly",
+      "value": "24750",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya Menon is responsible for announcing the infrastructure budget cap change to the dev team.",
+      "subject": "Infrastructure budget announcement",
+      "attribute": "owner",
+      "value": "Divya Menon",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005",
+        "F1:006"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Announce infrastructure budget cap change to the dev team.",
+      "subject": "Infrastructure budget announcement",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": "2026-11-16",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:006"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Managed Postgres cost will be ₹19,200 per month after the next upgrade.",
+      "subject": "Managed Postgres",
+      "attribute": "budget_monthly",
+      "value": "19200",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:007"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who is assigned to renegotiate the Pingwire contract?",
+      "why": "Sameer noted that nobody has been assigned to this task yet.",
+      "cites": [
+        "F1:003"
+      ]
+    }
+  ]
+}
