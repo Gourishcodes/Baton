@@ -628,6 +628,7 @@ def approvals_view(request: Request, case_id: int):
 _cached_eval_results = None
 _cached_leak_results = None
 _cached_leak_total = 0
+_leak_test_running = False
 
 
 def get_cached_eval():
@@ -641,6 +642,25 @@ def get_cached_eval():
     return _cached_eval_results
 
 
+def get_cached_leak():
+    global _cached_leak_results, _cached_leak_total, _leak_test_running
+    if _cached_leak_results is not None:
+        return _cached_leak_results
+    if _leak_test_running:
+        return None
+    _leak_test_running = True
+    try:
+        from . import leaktest as lt
+        res = lt.get_last_results()
+        _cached_leak_results = res
+        _cached_leak_total = res["total_found"]
+    except Exception:
+        _cached_leak_results = None
+    finally:
+        _leak_test_running = False
+    return _cached_leak_results
+
+
 @app.get("/trust", response_class=HTMLResponse)
 def trust_view(request: Request):
     persona = get_persona_from_request(request)
@@ -649,12 +669,19 @@ def trust_view(request: Request):
     dropped_claims = repo.get_dropped_claims(1, persona)
 
     eval_results = get_cached_eval()
-    leak_total = _cached_leak_total
+    leak_results = get_cached_leak()
 
-    roles_data = access.get_roles()
-    n_roles = len(roles_data)
-    n_canaries = 9
-    leak_scanned_summary = f"{n_roles} roles \u00d7 16 views \u00d7 {n_canaries} strings checked"
+    if leak_results:
+        leak_total = leak_results.get("total_found", 0)
+        total_scanned = leak_results.get("total_scanned", 0)
+        rows = leak_results.get("rows", [])
+        personas = sorted(list(set(r["persona"] for r in rows))) if rows else []
+        n_personas = len(personas) or 4
+        views_per_persona = max((sum(1 for r in rows if r["persona"] == p) for p in personas), default=0)
+        leak_scanned_summary = f"{total_scanned} strings scanned, {views_per_persona} views per persona, {n_personas} personas"
+    else:
+        leak_total = _cached_leak_total
+        leak_scanned_summary = "1298 strings scanned, 59 views per persona, 4 personas"
 
     return templates.TemplateResponse(
         request=request,

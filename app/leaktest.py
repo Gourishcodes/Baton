@@ -74,6 +74,17 @@ def _set_persona(client, persona):
     client.cookies["baton_role"] = signed
 
 
+_last_leak_results = None
+
+
+def get_last_results():
+    """Retrieve the cached results of the last leak test run, or run one."""
+    global _last_leak_results
+    if _last_leak_results is None:
+        _last_leak_results = run_leak_test(verbose=False)
+    return _last_leak_results
+
+
 def run_leak_test(verbose: bool = True):
     """Execute the full leak test and return structured results.
 
@@ -333,7 +344,8 @@ def run_leak_test(verbose: bool = True):
                         f"and {other_persona} ({other_nums})"
                     )
 
-        return {
+        global _last_leak_results
+        _last_leak_results = {
             "total_found": total_found,
             "total_scanned": total_scanned,
             "rows": results_rows,
@@ -342,6 +354,7 @@ def run_leak_test(verbose: bool = True):
             "count_mismatches": count_mismatches,
             "positive_controls": positive_controls,
         }
+        return _last_leak_results
 
     finally:
         db.close()

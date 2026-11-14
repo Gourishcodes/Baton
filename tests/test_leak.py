@@ -124,3 +124,39 @@ class TestLeakTest:
             f"Not all expected canaries appeared for lead: "
             f"{[p for p in lead_controls if not p['present']]}"
         )
+
+    def test_trust_caption_scanned_count_matches_leaktest_report(self):
+        """The caption under the counter on /trust shows the real scanned count from leak test."""
+        import subprocess
+        import re
+        from starlette.testclient import TestClient
+        from app.main import app
+
+        # 1. Run python -m app.leaktest and extract the reported count
+        proc = subprocess.run(
+            [sys.executable, "-m", "app.leaktest"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert proc.returncode == 0, f"app.leaktest failed:\n{proc.stderr}"
+        match_cli = re.search(r"Strings scanned:\s*(\d+)", proc.stdout)
+        assert match_cli is not None, f"Could not find 'Strings scanned' in CLI output:\n{proc.stdout}"
+        cli_scanned_count = int(match_cli.group(1))
+
+        # 2. Fetch /trust page and extract the scanned count from the caption under the counter
+        client = TestClient(app)
+        resp = client.get("/trust")
+        assert resp.status_code == 200
+
+        caption_match = re.search(r"(\d+)\s+strings scanned", resp.text)
+        assert caption_match is not None, f"Could not find 'X strings scanned' in /trust response:\n{resp.text}"
+        caption_scanned_count = int(caption_match.group(1))
+
+        # 3. Assert caption's scanned count equals the count python -m app.leaktest reports
+        assert caption_scanned_count == cli_scanned_count, (
+            f"Caption scanned count ({caption_scanned_count}) != CLI reported count ({cli_scanned_count})"
+        )
+
+        # 4. Assert "A strong check, not a proof." is kept
+        assert "A strong check, not a proof." in resp.text
