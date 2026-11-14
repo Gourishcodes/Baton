@@ -8,3 +8,4 @@
 - Export to PDF, Word documents, or email is not implemented; handovers are viewed and acknowledged directly in the web UI.
 - Dark mode is not implemented; only the light warm-paper palette is styled.
 - Viewports narrower than 640px stack the source drawer over content rather than displaying side-by-side.
+- The free hosted demo takes about a minute on cold start after idle, and all visitors share a single demo case (click 'Reset demo' if closed).

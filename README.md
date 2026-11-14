@@ -15,6 +15,10 @@ python -m uvicorn app.main:app --port 8000
 
 Open [http://localhost:8000](http://localhost:8000) and click **Open the demo case**.
 
+## About the hosted demo
+
+The hosted demo replays one recorded extraction (gemini-3.5-flash-lite) of the synthetic demo sources. It never calls a model and has no API key, so a dataset uploaded there will not be analysed. Everything after extraction runs live on every click: citation checks, access control, conflict detection, sticky approvals and the leak test. The live extraction path exists in the code (scripts/build_cache.py uses it) but has not been tested through the upload form, and is planned for Round 3. The demo is on a free host, so the first load after idle can take about a minute. Everyone shares one demo case; if it shows Closed, click Reset demo.
+
 ## Running Tests
 
 All tests run locally without network access or live API keys:
