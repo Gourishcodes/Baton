@@ -122,10 +122,20 @@ def get_claims(case_id: int, persona: str, type_filter: str = None,
 
             result.append(d)
         else:
+            dec = None
+            if row["identity"]:
+                d_row = conn.execute(
+                    "SELECT decision FROM decisions WHERE identity = ? AND case_id = ?",
+                    (row["identity"], case_id)
+                ).fetchone()
+                if d_row:
+                    dec = {"decision": d_row["decision"]}
             result.append({
                 "id": row["id"],
+                "type": row["type"],
                 "visible": False,
                 "labels": labels,
+                "decision": dec,
             })
 
     return result

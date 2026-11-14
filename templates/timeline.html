@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 
 {% block title %}Timeline - Baton{% endblock %}
 
@@ -9,17 +10,30 @@
     <p class="meta" style="margin-top:var(--s1)">Chronological sequence of dated decisions, milestones, and departures.</p>
   </div>
 
+  {% if timeline_items %}
   <ul class="tl">
-    <li>
-      <div class="d">2026-10-21</div>
+    {% for item in timeline_items %}
+    <li {% if item.flags.get('superseded_by') %}class="claim--superseded"{% endif %}>
+      <div class="d">{{ item.timeline_date }}</div>
       <div class="rail"></div>
-      <div>SMS moved from Textly to Pingwire.</div>
+      <div>
+        <span class="text" {% if item.flags.get('superseded_by') %}style="color:var(--ink-3)"{% endif %}>{{ item.text }}</span>
+        <span class="cites" style="margin-left:var(--s2)">
+          {% for c in item.cites %}
+          <a class="cite" href="/case/{{ case.id }}/claims/{{ item.id }}/source?line={{ c.line_id }}">{{ c.line_id.replace(':', '·') }}</a>
+          {% endfor %}
+        </span>
+        {% if item.flags.get('superseded_by') %}
+        <p class="note" style="margin-top:var(--s1);color:var(--ink-3)">Superseded by the claim at {{ item.superseded_by_cite }}.</p>
+        {% elif item.flags.get('conflict_with') %}
+        <p class="note" style="margin-top:var(--s1)">Disagrees with the claim at {{ item.conflict_cite }}.</p>
+        {% endif %}
+      </div>
     </li>
-    <li>
-      <div class="d">2026-11-27</div>
-      <div class="rail"></div>
-      <div>Meera Joshi last working day.</div>
-    </li>
+    {% endfor %}
   </ul>
+  {% else %}
+  <p class="meta" style="margin-top:var(--s6)">No dated claims found.</p>
+  {% endif %}
 </div>
 {% endblock %}

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS cases (
     leaver TEXT,
     successor TEXT,
     approver TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
     created_at TEXT NOT NULL
 );
 
@@ -179,6 +180,11 @@ def get_conn() -> sqlite3.Connection:
         _local.conn.execute("PRAGMA journal_mode=WAL")
         _local.conn.execute("PRAGMA foreign_keys=ON")
         _local.conn.executescript(SCHEMA)
+        try:
+            _local.conn.execute("ALTER TABLE cases ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+            _local.conn.commit()
+        except sqlite3.OperationalError:
+            pass
     return _local.conn
 
 

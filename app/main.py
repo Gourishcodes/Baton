@@ -136,9 +136,24 @@ def demo_open():
 @app.post("/demo/reset")
 def demo_reset():
     """Reset the demo case back to initial seeded state."""
-    db.reset()
-    ensure_demo_seeded()
-    return RedirectResponse(url="/case/1/claims", status_code=status.HTTP_303_SEE_OTHER)
+    conn = db.get_conn()
+    conn.execute("DELETE FROM decisions")
+    conn.execute("DELETE FROM versions")
+    conn.execute("DELETE FROM acknowledgements")
+    conn.execute("DELETE FROM dropped_claims")
+    conn.execute("UPDATE gaps SET status = 'open', answer_claim_id = NULL")
+    conn.execute("DELETE FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE basis = 'attested')")
+    conn.execute("DELETE FROM claims WHERE basis = 'attested'")
+    conn.execute("UPDATE cases SET status = 'open' WHERE id = 1")
+    conn.commit()
+
+    review.seed_demo_decisions(1)
+    review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
+
+    response = RedirectResponse(url="/case/1/claims", status_code=status.HTTP_303_SEE_OTHER)
+    signed_val = signer.sign(b"lead").decode("utf-8")
+    response.set_cookie(key="baton_role", value=signed_val, httponly=True, samesite="lax")
+    return response
 
 
 @app.get("/case/{case_id}/sources", response_class=HTMLResponse)
@@ -227,7 +242,7 @@ def claims_view(
     # If this is an HTMX request for ledger only:
     if request.headers.get("HX-Request") == "true" and not request.headers.get("HX-Target") == "drawer":
         # Render the ledger-content fragment
-        ledger_template = templates.from_string("""
+        ledger_template = templates.env.from_string("""
 {% import "_macros.html" as m %}
 <div class="ledger" role="list">
   {% for item in claims %}
@@ -266,6 +281,7 @@ def claims_view(
             "drawer_open": drawer_open,
             "drawer_html": drawer_html,
             "open_line": open_cite,
+            "is_seeded_demo": True,
             "active_tab": "claims",
         }
     )
@@ -308,69 +324,321 @@ def claim_source_drawer(request: Request, case_id: int, cid: int, line: str | No
 
 
 @app.post("/case/{case_id}/claims/{cid}/decision")
-def claim_decision(request: Request, case_id: int, cid: int, action: str):
+async def claim_decision(
+    request: Request,
+    case_id: int,
+    cid: int,
+    action: str | None = None,
+    text: str | None = None,
+):
     """Approve, edit, reject, or restore a claim (Approver only)."""
     persona = get_persona_from_request(request)
     if persona != "lead":
         raise HTTPException(status_code=403, detail="Only approver may record decisions")
 
+    form = {}
+    try:
+        form = await request.form()
+    except Exception:
+        pass
+
+    action = action or form.get("action")
+    edited_text = text or form.get("text")
+
     claim = repo.get_claim(case_id, cid, persona)
     if not claim or not claim.get("identity"):
         return not_found_response()
 
+    # If action is edit and no text was submitted, return inline editing form
+    if action == "edit" and not edited_text:
+        edit_form_template = templates.env.from_string("""
+<form hx-post="/case/{{ case_id }}/claims/{{ claim.id }}/decision" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML" class="claim claim--{{ claim.basis }}" id="claim-{{ claim.id }}">
+  <input type="hidden" name="action" value="edit">
+  <span class="type">{{ claim.type }}</span>
+  <div>
+    <textarea name="text" class="field" style="width:100%;min-height:56px;margin-bottom:var(--s2)">{{ claim.decision.edited_text if (claim.decision and claim.decision.edited_text) else claim.text }}</textarea>
+    <div class="rowfoot">
+      <button type="submit" class="btn btn--primary">Save</button>
+      <button type="button" class="btn btn--quiet" hx-get="/case/{{ case_id }}/claims" hx-target="#ledger-content">Cancel</button>
+    </div>
+  </div>
+</form>
+""")
+        return HTMLResponse(edit_form_template.render({"case_id": case_id, "claim": claim}))
+
     identity = claim["identity"]
     if action in ("approve", "edit", "reject", "restore"):
-        review.record_decision(case_id, identity, action, by="Divya Menon")
+        decision_val = "approved" if action == "approve" else ("rejected" if action == "reject" else ("edited" if action == "edit" else "restore"))
+        review.record_decision(case_id, identity, decision_val, edited_text=edited_text, by="Divya Menon")
 
-    # Re-fetch updated claim and render single claim card
-    updated_claim = repo.get_claim(case_id, cid, persona)
-    claim_macro_template = templates.from_string("""
+    if request.headers.get("HX-Request") == "true":
+        updated_claim = repo.get_claim(case_id, cid, persona)
+        claim_macro_template = templates.env.from_string("""
 {% import "_macros.html" as m %}
 {{ m.claim_card(claim, persona='lead') }}
 """)
-    return HTMLResponse(claim_macro_template.render({"claim": updated_claim}))
+        return HTMLResponse(claim_macro_template.render({"claim": updated_claim}))
 
+    return RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
 
-# --- Stubs for other routes visited by test_design_rules ---
 
 @app.get("/case/{case_id}/gaps", response_class=HTMLResponse)
 def gaps_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
     case = repo.get_case(case_id, persona)
+    if not case:
+        return not_found_response()
+    gaps = repo.get_gaps(case_id, persona)
     counts = get_nav_counts(case_id, persona)
-    return templates.TemplateResponse(request=request, name="gaps.html", context={"request": request, "role": persona, "case": case, "counts": counts, "active_tab": "gaps"})
+    allowed_labels = sorted(access.persona_holds(persona))
+    return templates.TemplateResponse(
+        request=request,
+        name="gaps.html",
+        context={
+            "request": request,
+            "role": persona,
+            "case": case,
+            "counts": counts,
+            "gaps": gaps,
+            "allowed_labels": allowed_labels,
+            "active_tab": "gaps",
+        }
+    )
+
+
+@app.post("/case/{case_id}/gaps/{gid}/answer")
+async def answer_gap(request: Request, case_id: int, gid: int):
+    """Answer a gap (Leaver or Lead). Hidden gap returns identical 404."""
+    persona = get_persona_from_request(request)
+    if persona not in ("leaver", "lead"):
+        raise HTTPException(status_code=403, detail="Only leaver or approver may answer gaps")
+
+    gap = repo.get_gap(case_id, gid, persona)
+    if not gap:
+        return not_found_response()
+
+    form = await request.form()
+    ans_text = str(form.get("text", "")).strip()
+    ans_label = str(form.get("label", "team"))
+    ans_type = str(form.get("type", "Decision"))
+
+    if not ans_text:
+        return RedirectResponse(url=f"/case/{case_id}/gaps", status_code=status.HTTP_303_SEE_OTHER)
+
+    holds = access.persona_holds(persona)
+    if ans_label not in holds:
+        ans_label = sorted(holds)[0] if holds else "team"
+
+    answerer = "Meera Joshi" if persona == "leaver" else ("Divya Menon" if persona == "lead" else persona)
+    run = repo.get_latest_run(case_id)
+    run_id = run["id"] if run else 1
+
+    conn = db.get_conn()
+    cur = conn.execute(
+        """INSERT INTO claims (case_id, run_id, type, text, basis, labels, flags, identity, attested_by, attested_at, source_gap_id)
+           VALUES (?, ?, ?, ?, 'attested', ?, '{}', ?, ?, ?, ?)""",
+        (case_id, run_id, ans_type, ans_text, json.dumps([ans_label]), f"attested:{gid}", answerer, db.now_iso(), gid)
+    )
+    claim_id = cur.lastrowid
+    conn.execute(
+        "UPDATE gaps SET status = 'answered', answer_claim_id = ? WHERE id = ?",
+        (claim_id, gid)
+    )
+    conn.commit()
+
+    return RedirectResponse(url=f"/case/{case_id}/gaps", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/case/{case_id}/conflicts", response_class=HTMLResponse)
 def conflicts_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
     case = repo.get_case(case_id, persona)
+    if not case:
+        return not_found_response()
+    conflicts = repo.get_conflicts(case_id, persona)
     counts = get_nav_counts(case_id, persona)
-    return templates.TemplateResponse(request=request, name="conflicts.html", context={"request": request, "role": persona, "case": case, "counts": counts, "active_tab": "conflicts"})
+    total_conflicts = db.get_conn().execute(
+        "SELECT COUNT(*) as cnt FROM conflicts WHERE case_id = ?", (case_id,)
+    ).fetchone()["cnt"]
+    restricted_count = max(0, total_conflicts - len(conflicts))
+    return templates.TemplateResponse(
+        request=request,
+        name="conflicts.html",
+        context={
+            "request": request,
+            "role": persona,
+            "case": case,
+            "counts": counts,
+            "conflicts": conflicts,
+            "restricted_count": restricted_count,
+            "active_tab": "conflicts",
+        }
+    )
 
 
 @app.get("/case/{case_id}/timeline", response_class=HTMLResponse)
 def timeline_view(request: Request, case_id: int):
+    import re
     persona = get_persona_from_request(request)
     case = repo.get_case(case_id, persona)
+    if not case:
+        return not_found_response()
     counts = get_nav_counts(case_id, persona)
-    return templates.TemplateResponse(request=request, name="timeline.html", context={"request": request, "role": persona, "case": case, "counts": counts, "active_tab": "timeline"})
+    claims = repo.get_claims(case_id, persona)
+
+    date_pattern = re.compile(r'\b(20\d{2}-\d{2}-\d{2})\b')
+    timeline_items = []
+    for c in claims:
+        if not c.get("visible"):
+            continue
+        d = c.get("event_date") or c.get("due")
+        if not d and c.get("attribute") in ("due_date", "date"):
+            val = c.get("value")
+            if val and date_pattern.match(val):
+                d = val
+        if not d:
+            m = date_pattern.search(c.get("text", ""))
+            if m:
+                d = m.group(1)
+        if d:
+            c_copy = dict(c)
+            c_copy["timeline_date"] = d
+            timeline_items.append(c_copy)
+
+    timeline_items.sort(key=lambda x: x["timeline_date"])
+
+    return templates.TemplateResponse(
+        request=request,
+        name="timeline.html",
+        context={
+            "request": request,
+            "role": persona,
+            "case": case,
+            "counts": counts,
+            "timeline_items": timeline_items,
+            "active_tab": "timeline",
+        }
+    )
 
 
 @app.get("/case/{case_id}/handover", response_class=HTMLResponse)
 def handover_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
     case = repo.get_case(case_id, persona)
+    if not case:
+        return not_found_response()
     counts = get_nav_counts(case_id, persona)
-    return templates.TemplateResponse(request=request, name="handover.html", context={"request": request, "role": persona, "case": case, "counts": counts, "active_tab": "handover"})
+
+    latest_v = repo.get_latest_version(case_id)
+    latest_version_obj = None
+    if latest_v > 0:
+        row = db.get_conn().execute(
+            "SELECT * FROM versions WHERE case_id = ? AND n = ?", (case_id, latest_v)
+        ).fetchone()
+        latest_version_obj = dict(row) if row else None
+
+    ack = repo.get_acknowledgement(case_id, latest_v) if latest_v > 0 else None
+
+    # Handover content = claims whose decision is approved or edited, filtered by persona
+    claims = repo.get_claims(case_id, persona)
+    approved_claims = [c for c in claims if c.get("decision") and c["decision"].get("decision") in ("approved", "edited")]
+    unanswered_gaps = [g for g in repo.get_gaps(case_id, persona) if g.get("status") == "open"]
+
+    sections = {
+        "owners": [c for c in approved_claims if c.get("type") == "Owner"],
+        "risks": [c for c in approved_claims if c.get("type") == "Risk" or c.get("flags", {}).get("conflict_with")],
+        "dependencies": [c for c in approved_claims if c.get("type") == "Dependency"],
+        "open": [c for c in approved_claims if c.get("type") == "OpenQuestion"],
+        "open_gaps": unanswered_gaps,
+        "actions": sorted([c for c in approved_claims if c.get("type") == "NextAction"], key=lambda x: x.get("due") or "9999"),
+        "decisions": [c for c in approved_claims if c.get("type") == "Decision" and not c.get("flags", {}).get("superseded_by")],
+        "history": [c for c in approved_claims if c.get("flags", {}).get("superseded_by")],
+    }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="handover.html",
+        context={
+            "request": request,
+            "role": persona,
+            "case": case,
+            "counts": counts,
+            "latest_version": latest_version_obj,
+            "acknowledgement": ack,
+            "sections": sections,
+            "active_tab": "handover",
+        }
+    )
+
+
+@app.post("/case/{case_id}/approve-handover")
+def approve_handover(request: Request, case_id: int):
+    """Approve handover (Lead only). Creates version n+1."""
+    persona = get_persona_from_request(request)
+    if persona != "lead":
+        raise HTTPException(status_code=403, detail="Only approver may approve handover")
+    review.create_version(case_id, approved_by="Divya Menon")
+    return RedirectResponse(url=f"/case/{case_id}/handover", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/case/{case_id}/acknowledge")
+def acknowledge_handover(request: Request, case_id: int):
+    """Acknowledge receipt (Successor only). Closes the case."""
+    persona = get_persona_from_request(request)
+    if persona != "successor":
+        raise HTTPException(status_code=403, detail="Only successor may acknowledge handover")
+    latest_v = repo.get_latest_version(case_id)
+    review.acknowledge_version(case_id, latest_v, by="Arjun Rao")
+    conn = db.get_conn()
+    conn.execute("UPDATE cases SET status = 'closed' WHERE id = ?", (case_id,))
+    conn.commit()
+    return RedirectResponse(url=f"/case/{case_id}/handover", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/case/{case_id}/approvals", response_class=HTMLResponse)
 def approvals_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
     case = repo.get_case(case_id, persona)
+    if not case:
+        return not_found_response()
     counts = get_nav_counts(case_id, persona)
-    return templates.TemplateResponse(request=request, name="approvals.html", context={"request": request, "role": persona, "case": case, "counts": counts, "active_tab": "approvals"})
+    versions_raw = repo.get_versions(case_id, persona)
+    versions = []
+    for v in versions_raw:
+        vd = dict(v)
+        snap = json.loads(v["snapshot"]) if v.get("snapshot") else []
+        vd["claim_count"] = len(snap)
+        vd["acknowledgement"] = repo.get_acknowledgement(case_id, v["n"])
+        versions.append(vd)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="approvals.html",
+        context={
+            "request": request,
+            "role": persona,
+            "case": case,
+            "counts": counts,
+            "versions": versions,
+            "active_tab": "approvals",
+        }
+    )
+
+
+_cached_eval_results = None
+_cached_leak_results = None
+_cached_leak_total = 0
+
+
+def get_cached_eval():
+    global _cached_eval_results
+    if _cached_eval_results is None:
+        try:
+            from . import eval as ev
+            _cached_eval_results = ev.run_eval()
+        except Exception:
+            _cached_eval_results = None
+    return _cached_eval_results
 
 
 @app.get("/trust", response_class=HTMLResponse)
@@ -379,6 +647,15 @@ def trust_view(request: Request):
     case = repo.get_case(1, persona)
     counts = get_nav_counts(1, persona) if case else {}
     dropped_claims = repo.get_dropped_claims(1, persona)
+
+    eval_results = get_cached_eval()
+    leak_total = _cached_leak_total
+
+    roles_data = access.get_roles()
+    n_roles = len(roles_data)
+    n_canaries = 9
+    leak_scanned_summary = f"{n_roles} roles \u00d7 16 views \u00d7 {n_canaries} strings checked"
+
     return templates.TemplateResponse(
         request=request,
         name="trust.html",
@@ -389,5 +666,27 @@ def trust_view(request: Request):
             "counts": counts,
             "dropped_claims": dropped_claims,
             "active_tab": "trust",
+            "leak_total": leak_total,
+            "leak_scanned_summary": leak_scanned_summary,
+            "eval_results": eval_results,
         }
     )
+
+
+@app.post("/trust/leak-test")
+def trust_leak_test(request: Request):
+    """Run the leak test live and stream/redirect."""
+    global _cached_leak_results, _cached_leak_total
+    from . import leaktest as lt
+    _cached_leak_results = lt.run_leak_test(verbose=False)
+    _cached_leak_total = _cached_leak_results["total_found"]
+    return RedirectResponse(url="/trust", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/trust/eval")
+def trust_eval(request: Request):
+    """Run the accuracy check live and stream/redirect."""
+    global _cached_eval_results
+    from . import eval as ev
+    _cached_eval_results = ev.run_eval()
+    return RedirectResponse(url="/trust", status_code=status.HTTP_303_SEE_OTHER)

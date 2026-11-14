@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 
 {% block title %}Gaps - Baton{% endblock %}
 
@@ -9,10 +10,60 @@
     <p class="meta" style="margin-top:var(--s1)">Missing owners, undefined decisions, and open questions that need the leaver's answer.</p>
   </div>
 
-  <div class="gap">
-    <h2 class="q">Option B for the retry queue was agreed but options are never defined</h2>
-    <p class="meta">Undefined reference citing N1·019</p>
-    <div class="quote">[N1:019] agreed option B for the retry queue</div>
+  {% if gaps %}
+  <div style="display:flex;flex-direction:column;gap:var(--s6)">
+    {% for g in gaps %}
+    <div class="gap" id="gap-{{ g.id }}">
+      <div class="q">{{ g.question }}</div>
+      <p class="meta" style="margin-bottom:var(--s3)">{{ g.why }}</p>
+      {% if g.cited_lines %}
+        {% for cl in g.cited_lines %}
+        <div class="quote">{{ cl.line_id.replace(':', '·') }} &nbsp;{{ cl.text }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% if g.status == 'answered' and g.answer_claim %}
+      <div style="margin-top:var(--s4)">
+        {{ m.claim_card(g.answer_claim, persona=role) }}
+        <p class="meta" style="margin-top:var(--s2);color:var(--attested)">Attested claims do not go stale automatically: there is no source line to compare.</p>
+      </div>
+      {% elif role in ['leaver', 'lead'] %}
+      <form method="post" action="/case/{{ case.id }}/gaps/{{ g.id }}/answer" style="margin-top:var(--s4);max-width:540px">
+        <div style="margin-bottom:var(--s3)">
+          <label class="lbl" for="ans-text-{{ g.id }}">Answer</label>
+          <textarea id="ans-text-{{ g.id }}" name="text" class="field" required style="width:100%;min-height:56px"></textarea>
+        </div>
+        <div style="display:flex;gap:var(--s3);margin-bottom:var(--s3);flex-wrap:wrap">
+          <div style="flex:1;min-width:140px">
+            <label class="lbl" for="ans-type-{{ g.id }}">Type</label>
+            <select id="ans-type-{{ g.id }}" name="type" class="field field--sm" style="width:100%">
+              <option value="Decision" {% if 'Who owns' not in g.question %}selected{% endif %}>Decision</option>
+              <option value="Owner" {% if 'Who owns' in g.question %}selected{% endif %}>Owner</option>
+              <option value="NextAction">NextAction</option>
+              <option value="Risk">Risk</option>
+              <option value="Dependency">Dependency</option>
+              <option value="OpenQuestion">OpenQuestion</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:140px">
+            <label class="lbl" for="ans-label-{{ g.id }}">Clearance label</label>
+            <select id="ans-label-{{ g.id }}" name="label" class="field field--sm" style="width:100%">
+              {% for l in allowed_labels %}
+              <option value="{{ l }}" {% if l in g.labels %}selected{% endif %}>{{ l|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn--primary">Record answer</button>
+      </form>
+      {% else %}
+      <p class="meta" style="margin-top:var(--s3)">Waiting for leaver or approver to answer.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
+  {% else %}
+  <p class="meta" style="margin-top:var(--s6)">No gaps found.</p>
+  {% endif %}
 </div>
 {% endblock %}

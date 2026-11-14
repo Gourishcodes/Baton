@@ -27,6 +27,15 @@
     </div>
   </div>
 
+  {% if is_seeded_demo %}
+  <div class="banner" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s4);gap:var(--s3)">
+    <span>Demo case seeded: 28 sourced claims approved by Divya Menon (seeded). Inferred claims, conflicts, and gaps remain pending for review.</span>
+    <form method="post" action="/demo/reset">
+      <button type="submit" class="btn btn--quiet" style="font-size:12px;padding:2px 8px;height:24px">Reset demo</button>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="filters" role="group" aria-label="Filter claims" style="margin-bottom:var(--s4)">
     <button class="filter" aria-pressed="{{ 'true' if (not current_filter and not needs_review) else 'false' }}" hx-get="/case/1/claims" hx-target="#ledger-content" hx-push-url="true">All <span class="num">{{ filter_counts.all }}</span></button>
     <button class="filter" aria-pressed="{{ 'true' if needs_review else 'false' }}" hx-get="/case/1/claims?needs_review=1" hx-target="#ledger-content" hx-push-url="true">Needs review <span class="num">{{ filter_counts.needs_review }}</span></button>

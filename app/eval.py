@@ -39,6 +39,9 @@ def run_eval(
     # Use a temporary database for isolation
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
+    old_path = db.get_db_path() if db._db_path else None
+    old_env_db = os.environ.get("BATON_DB")
+    os.environ["BATON_DB"] = tmp.name
     db.set_db_path(tmp.name)
 
     try:
@@ -401,6 +404,14 @@ def run_eval(
             os.unlink(tmp.name)
         except Exception:
             pass
+        if old_path:
+            db.set_db_path(old_path)
+        else:
+            db.reset()
+        if old_env_db:
+            os.environ["BATON_DB"] = old_env_db
+        elif "BATON_DB" in os.environ:
+            del os.environ["BATON_DB"]
 
 
 def format_report(results: dict[str, Any]) -> str:

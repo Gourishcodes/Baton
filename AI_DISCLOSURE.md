@@ -31,13 +31,17 @@ Every module below was written or substantially shaped by AI (Antigravity / Clau
 - `templates/claims.html` — Claims ledger view with filter pills, status badges, server-drawn redaction stubs, and source drawer.
 - `templates/sources.html` — Sources listing with upload form for Approver and responsive table.
 - `templates/drawer.html` — Source drawer partial rendering cited file lines and highlighting target line.
-- `templates/gaps.html` — Stub template for Gaps view.
-- `templates/conflicts.html` — Stub template for Conflicts view.
-- `templates/timeline.html` — Stub template for Timeline view.
-- `templates/handover.html` — Stub template for Handover document view.
-- `templates/approvals.html` — Stub template for Approvals view.
-- `templates/trust.html` — Stub template for Trust view.
+- `templates/gaps.html` — Gap interview screen with answer form, clearance-constrained label selector, and attestation cards.
+- `templates/conflicts.html` — Disagreements view with side-by-side claim comparison and clearance notices.
+- `templates/timeline.html` — Chronological timeline with dates, vertical rails, and superseded claim styling.
+- `templates/handover.html` — Handover document view in Newsreader serif with SPEC section 8 ordering, successor label stripping, and redaction stubs.
+- `templates/approvals.html` — Snapshot history of approved handover versions, claim counts, seeded flag, and receipt status.
+- `app/leaktest.py` — Automated leak test runner across all roles and views, verifying zero canary leaks, stub markup, successor label exclusion, and positive controls.
+- `templates/trust.html` — Trust page displaying 96px mono leak counter, accuracy measures from eval, honesty lines, and test trigger buttons.
 - `scripts/capture_screenshots.py` — Playwright script to capture full-page audit screenshots at 1440w and 390w.
-- `tests/test_tab_counts.py` — Test 8: persona-filtered tab counts equal openable rows for every persona.
+- `tests/test_tab_counts.py` — Test: persona-filtered tab counts equal openable rows for every persona.
 - `tests/test_drawer_centering.py` — Playwright test asserting drawer opens on ?open_cite=, gives srcline--cited, and centers line vertically.
+- `tests/test_screens_flows.py` — Integration test suite covering gaps answering, 404 security checks, sticky decisions, handover label stripping, and demo reset.
+- `tests/test_leak.py` — Tests for leak detection: zero leaks on clean state, canary injection catching, and positive controls.
+- `tests/test_core_loop.py` — Playwright end-to-end test verifying the full stranger demo loop from home page to closed handover.
 - `requirements.txt` — Pinned dependency versions.
