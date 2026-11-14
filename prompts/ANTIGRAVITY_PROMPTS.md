@@ -132,6 +132,9 @@ Prove it: run pytest -q, python -m app.leaktest, python -m app.eval and BATON_UR
 
 Gate: all four commands green, the leak test reports a count (not "safe"), and the core-loop test passes. If the schedule slips, SPEC section 16 and the Round 1 cut order apply: drop version history to a counter first, never the leak test, the filter, citation checking or sticky decisions.
 
+Also assert that tab counts and filter-chip counts never differ between personas who hold the same labels.
+Do not edit app/extract.py, do not change PROMPT_VERSION, and do not run scripts/build_cache.py. The committed demo_cache must stay as it is.
+
 ---
 
 ## Prompt 5: ship it (about 2 hours)

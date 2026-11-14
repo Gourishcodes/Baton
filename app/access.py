@@ -46,8 +46,7 @@ def visible(item_labels: list[str] | set[str], persona: str, data_dir: str = DAT
     This is the ONLY place that decides visibility. Nothing else filters.
     """
     if not item_labels:
-        # Items with no labels are visible to everyone
-        return True
+        return False
     holds = persona_holds(persona, data_dir)
     return set(item_labels).issubset(holds)
 

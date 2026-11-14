@@ -61,17 +61,23 @@ class TestAccessVisible:
         (["team", "finance", "hr"], "lead", True),
         (["team", "finance", "hr"], "finance_ops", False),
 
-        # Empty labels - visible to everyone
-        ([], "leaver", True),
-        ([], "successor", True),
-        ([], "lead", True),
-        ([], "finance_ops", True),
+        # Empty labels - not visible to anyone
+        ([], "leaver", False),
+        ([], "successor", False),
+        ([], "lead", False),
+        ([], "finance_ops", False),
     ])
     def test_visible(self, labels, persona, expected):
         assert access.visible(labels, persona) == expected, \
             f"visible({labels}, {persona}) should be {expected}"
 
+    def test_empty_labels_not_visible(self):
+        """visible() must return False for an item whose label list is empty."""
+        for p in ["leaver", "successor", "lead", "finance_ops", "nobody"]:
+            assert access.visible([], p) is False
+            assert access.visible(set(), p) is False
+
     def test_unknown_persona_sees_nothing(self):
         """An unknown persona holds nothing."""
         assert access.visible(["team"], "nobody") is False
-        assert access.visible([], "nobody") is True
+        assert access.visible([], "nobody") is False
