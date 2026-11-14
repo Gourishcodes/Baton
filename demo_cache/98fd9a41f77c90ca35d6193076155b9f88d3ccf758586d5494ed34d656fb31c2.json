@@ -1,0 +1,141 @@
+{
+  "claims": [
+    {
+      "type": "Owner",
+      "text": "Meera Joshi is resigning from her position.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:002"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Meera Joshi's last working day is 27 Nov 2026, with the notice shortfall waived.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-11-27",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "A retention counter-offer of ₹11,40,000 CTC was declined by Meera Joshi.",
+      "subject": "Retention counter-offer",
+      "attribute": "budget_monthly",
+      "value": "1140000",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:004"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Two sprint commitments were missed in October.",
+      "subject": "Performance",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:005"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "A formal warning (ref HR-W2-9185) was considered but not issued.",
+      "subject": "Formal warning",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:005"
+      ]
+    },
+    {
+      "type": "Dependency",
+      "text": "Ritu Bhandari is the external recruiter for Meera Joshi.",
+      "subject": "Ritu Bhandari",
+      "attribute": "vendor",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:006"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Do not share the reason for leaving or the counter-offer with the successor or the wider team.",
+      "subject": "Communication policy",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:007"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Divya Menon to decide the wording of the reference letter.",
+      "subject": "Reference letter",
+      "attribute": "approver",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:008"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "What is the specific wording of the reference letter?",
+      "why": "The wording is currently TBD and needs to be decided by Divya.",
+      "cites": [
+        "H1:008"
+      ]
+    }
+  ]
+}

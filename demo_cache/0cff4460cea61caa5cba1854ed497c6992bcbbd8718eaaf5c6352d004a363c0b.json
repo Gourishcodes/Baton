@@ -1,0 +1,264 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "The project stack is FastAPI and managed Postgres.",
+      "subject": "stack",
+      "attribute": "stack",
+      "value": "FastAPI + Postgres",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:004",
+        "N1:004"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Meera Joshi owns the notification service.",
+      "subject": "notification service",
+      "attribute": "owner",
+      "value": "Meera Joshi",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:004",
+        "N1:005"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Arjun Rao takes over the notification service and reconcile job from Meera Joshi.",
+      "subject": "notification service",
+      "attribute": "owner",
+      "value": "Arjun Rao",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "notification service",
+        "attribute": "owner",
+        "old_value": "Meera Joshi"
+      },
+      "cites": [
+        "C1:038",
+        "N1:023"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "SMS provider is Pingwire, replacing Textly.",
+      "subject": "SMS provider",
+      "attribute": "vendor",
+      "value": "Pingwire",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "SMS provider",
+        "attribute": "vendor",
+        "old_value": "Textly"
+      },
+      "cites": [
+        "C1:026",
+        "N1:014"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Max 3 messages per order (received, ready, delayed). No marketing messages.",
+      "subject": "SMS policy",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:013",
+        "C1:014"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Multi-language templates are cut from v1.",
+      "subject": "multi-language support",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:030",
+        "C1:031"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Nightly reconcile job fails on the first Monday of the month due to late gateway settlement files.",
+      "subject": "reconcile job",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": true,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:017",
+        "C1:019",
+        "C1:034",
+        "N1:024"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Workaround for reconcile job failure: rerun with --wait-for-file 90.",
+      "subject": "reconcile job",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:017",
+        "C1:034",
+        "N1:024"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Webhook retries capped at 5 with exponential backoff (2s, 4s, 8s, 16s, 32s).",
+      "subject": "webhook retries",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:020"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya Menon manages production deploys and access grants.",
+      "subject": "access grants",
+      "attribute": "owner",
+      "value": "Divya Menon",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:024",
+        "N1:007"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Rotate Pingwire API key.",
+      "subject": "Pingwire API key",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": "2026-11-27",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:025",
+        "T1:011"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Apply migration 0007 on staging.",
+      "subject": "migration 0007",
+      "attribute": "none",
+      "value": null,
+      "owner": "Meera Joshi",
+      "due": "2026-11-18",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:033",
+        "N1:029"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Add weekly CSV stats task to the board.",
+      "subject": "weekly CSV stats",
+      "attribute": "none",
+      "value": null,
+      "owner": "Meera Joshi",
+      "due": "2026-11-04",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:035",
+        "C1:036",
+        "C1:037"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who will cover on-call after 2026-11-27?",
+      "why": "Meera is leaving and Tanvi is unavailable in December.",
+      "cites": [
+        "C1:048",
+        "C1:049",
+        "N1:028"
+      ]
+    },
+    {
+      "question": "How will Arjun access the Pingwire dashboard?",
+      "why": "Meera is the only admin and is leaving.",
+      "cites": [
+        "C1:022",
+        "C1:023",
+        "N1:027"
+      ]
+    },
+    {
+      "question": "What is the status of the order_delayed template approval?",
+      "why": "Pending with telecom operator.",
+      "cites": [
+        "C1:028",
+        "T1:007"
+      ]
+    }
+  ]
+}

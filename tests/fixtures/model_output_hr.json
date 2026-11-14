@@ -1,0 +1,80 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Last working day agreed as 2026-11-27 with the notice shortfall waived (HR case).",
+      "subject": "Last working day agreed as 2026-11-27 wi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-11-27",
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "H1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "A retention counter-offer was declined.",
+      "subject": "A retention counter-offer was declined.",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "H1:004"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Two sprint commitments were missed in October; a formal warning was considered but not issued.",
+      "subject": "Two sprint commitments were missed in Oc",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "H1:005"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Wording of the reference letter is undecided (Divya).",
+      "subject": "Wording of the reference letter is undec",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "H1:008"
+      ]
+    },
+    {
+      "type": "Dependency",
+      "text": "External recruiter on Meera's side is named (private).",
+      "subject": "External recruiter on Meera's side is na",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "H1:006"
+      ]
+    }
+  ],
+  "gaps": []
+}

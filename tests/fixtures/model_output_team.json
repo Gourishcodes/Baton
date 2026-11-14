@@ -1,0 +1,519 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Stack is FastAPI + managed Postgres 15, because the POS webhook and staff app write concurrently.",
+      "subject": "Stack is FastAPI + managed Postgres 15, ",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:004",
+        "C1:006"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Textly was chosen as the SMS vendor (2026-09-09). SUPERSEDED by D03.",
+      "subject": "sms vendor",
+      "attribute": "vendor",
+      "value": "textly",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:008"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "SMS moved from Textly to Pingwire (2026-10-21) because Textly took 9 days to approve a DLT template and Pingwire took 1 day.",
+      "subject": "sms vendor",
+      "attribute": "vendor",
+      "value": "pingwire",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:026",
+        "N1:014"
+      ],
+      "supersedes": {
+        "subject": "sms vendor",
+        "attribute": "vendor",
+        "old_value": "textly"
+      }
+    },
+    {
+      "type": "Decision",
+      "text": "Pilot rule: at most 3 messages per order (received, ready, delayed), and no marketing messages, to protect the DLT category.",
+      "subject": "Pilot rule: at most 3 messages per order",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:013"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Webhook retries are capped at 5 with exponential backoff because the vendor rate limit is 10 req/s.",
+      "subject": "Webhook retries are capped at 5 with exp",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:020"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Multi-language (Marathi/Hindi) templates are cut from v1; English only until after the pilot.",
+      "subject": "Multi-language (Marathi/Hindi) templates",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:031"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Meera Joshi owns the notification service (notify/ package) until she leaves. Ownership is transferring to Arjun, so this is NOT a conflict.",
+      "subject": "Meera Joshi owns the notification servic",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:005",
+        "C1:004"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya Menon owns production deploys and access grants (SSH, cloud console).",
+      "subject": "Divya Menon owns production deploys and ",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:007"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Tanvi Shetty owns the staff app.",
+      "subject": "Tanvi Shetty owns the staff app.",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:006"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Sameer Kulkarni handles all vendor invoices.",
+      "subject": "Sameer Kulkarni handles all vendor invoi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:029"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Arjun Rao takes over the notify/ package and the reconcile job from 2026-11-09.",
+      "subject": "Arjun Rao takes over the notify/ package",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:023",
+        "C1:038"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Meera Joshi's last day is 2026-11-27.",
+      "subject": "Meera Joshi's last day is 2026-11-27.",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-11-27",
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:038"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "The nightly reconcile job fails on the first Monday of each month when the gateway settlement file is late. Workaround: rerun with --wait-for-file 90. Next occurrence 2026-12-07, after Meera has left.",
+      "subject": "The nightly reconcile job fails on the f",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": true,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:019",
+        "N1:024"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Only Meera's account is admin on the Pingwire dashboard; Arjun has no access yet (single point of failure).",
+      "subject": "Only Meera's account is admin on the Pin",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:023",
+        "N1:027"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "The order_delayed template is still pending with the telecom operator (blocked), and the 3-message rule needs it before the pilot.",
+      "subject": "The order_delayed template is still pend",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:028",
+        "T1:007"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Dashboard export is half done on branch feat/export-v2: migration 0007_add_export_jobs is not applied on staging and CSV streaming is not started.",
+      "subject": "Dashboard export is half done on branch ",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:033",
+        "T1:009"
+      ]
+    },
+    {
+      "type": "Dependency",
+      "text": "Staging SSH access is granted by Divya in the team channel (send the public key; never email keys).",
+      "subject": "Staging SSH access is granted by Divya i",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:024",
+        "C1:043"
+      ]
+    },
+    {
+      "type": "Dependency",
+      "text": "The reconcile job (jobs/reconcile.py) reads the gateway settlement file from the shared drive folder.",
+      "subject": "The reconcile job (jobs/reconcile.py) re",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "C1:045"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Who covers on-call after 2026-11-27 is undecided.",
+      "subject": "Who covers on-call after 2026-11-27 is u",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:028",
+        "C1:048"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Greenleaf Cafe onboarding is 'maybe in December'.",
+      "subject": "Greenleaf Cafe onboarding is 'maybe in D",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:009"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Meera applies migration 0007 on staging before the 2026-11-18 demo.",
+      "subject": "Meera applies migration 0007 on staging ",
+      "attribute": "none",
+      "value": null,
+      "owner": "Meera Joshi",
+      "due": "2026-11-18",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:029"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Divya rotates the Pingwire API key on Meera's last day.",
+      "subject": "Divya rotates the Pingwire API key on Me",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": "2026-11-27",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "T1:011",
+        "N1:025"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "UNTRACKED PROMISE: Meera told Mr. Deshpande (Saffron Lane Kitchen) he will get a weekly CSV of order and delivery stats, first one by 2026-11-20. It is not on the task board. Depends on T-14.",
+      "subject": "UNTRACKED PROMISE: Meera told Mr. Deshpa",
+      "attribute": "none",
+      "value": null,
+      "owner": "Meera Joshi",
+      "due": "2026-11-20",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": true,
+      "cites": [
+        "C1:035"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Delete the Textly adapter after 2026-11-21 (no owner named).",
+      "subject": "Delete the Textly adapter after 2026-11-",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": "2026-11-21",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "N1:015"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "pilot_launch due_date: 2026-11-28",
+      "subject": "pilot_launch",
+      "attribute": "due_date",
+      "value": "2026-11-28",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:032"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "pilot_launch due_date: 2026-12-05",
+      "subject": "pilot_launch",
+      "attribute": "due_date",
+      "value": "2026-12-05",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:013"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "infra_budget budget_monthly: ₹41,500",
+      "subject": "infra_budget",
+      "attribute": "budget_monthly",
+      "value": "₹41,500",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:021"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "DEFECT: This claim cites a non-existent line.",
+      "subject": "fake reference",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "FAKE:999"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "DEFECT: This team claim cites a finance line.",
+      "subject": "cross label cite",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "DEFECT: This claim has no cites at all.",
+      "subject": "no citations",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": []
+    }
+  ],
+  "gaps": [
+    {
+      "question": "'Option B for the retry queue' was agreed but the options are never defined in any source. Must be a gap question, NOT a Decision with invented content.",
+      "why": "From answer key fact GP01",
+      "cites": [
+        "N1:019"
+      ]
+    },
+    {
+      "question": "Nothing says who can add Arjun to the Pingwire dashboard, or how, now that only Meera is admin.",
+      "why": "From answer key fact GP02",
+      "cites": [
+        "N1:027",
+        "C1:023"
+      ]
+    },
+    {
+      "question": "Task T-09 (delivery report screen) has no owner.",
+      "why": "From answer key fact GP03",
+      "cites": [
+        "T1:006"
+      ]
+    },
+    {
+      "question": "Task T-16 (reconcile runbook) has no owner.",
+      "why": "From answer key fact GP04",
+      "cites": [
+        "T1:010"
+      ]
+    },
+    {
+      "question": "Task T-21 (load test) has no owner or due date.",
+      "why": "From answer key fact GP05",
+      "cites": [
+        "T1:014"
+      ]
+    },
+    {
+      "question": "Where the shared drive folder / settlement file lives is not stated.",
+      "why": "From answer key fact GP06",
+      "cites": [
+        "C1:045"
+      ]
+    }
+  ]
+}

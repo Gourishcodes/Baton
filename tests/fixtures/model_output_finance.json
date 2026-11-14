@@ -1,0 +1,104 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "infra_budget budget_monthly: ₹24,750 from 2026-12-01",
+      "subject": "infra_budget",
+      "attribute": "budget_monthly",
+      "value": "₹24,750 from 2026-12-01",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Pingwire annual contract signed with a 12-month lock-in (contract value and reference are confidential).",
+      "subject": "Pingwire annual contract signed with a 1",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "F1:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Infra cap drops to ₹24,750 per month from 2026-12-01; the dev team has not been told.",
+      "subject": "Infra cap drops to ₹24,750 per month fro",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-12-01",
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Divya tells the team about the infra cap on the 16th.",
+      "subject": "Divya tells the team about the infra cap",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": "2026-11-16",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "F1:006"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Managed Postgres will cost ₹19,200/month after the next upgrade, leaving little under the cap.",
+      "subject": "Managed Postgres will cost ₹19,200/month",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "F1:007"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Runway is 7.4 months at current burn (not to be shared outside the channel).",
+      "subject": "Runway is 7.4 months at current burn (no",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "cites": [
+        "F1:004"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "The Pingwire contract renews 2027-03-31 and nobody is assigned to renegotiate it.",
+      "why": "From answer key fact FG01",
+      "cites": [
+        "F1:003"
+      ]
+    }
+  ]
+}

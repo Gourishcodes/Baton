@@ -1,0 +1,37 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Infra budget conflict ACROSS labels: team chat says about ₹41,500/month, finance chat says the cap drops to ₹24,750/month from 1 Dec. The conflict needs team AND finance clearance, so the successor sees only a stub. (side 1)",
+      "subject": "infra_budget",
+      "attribute": "budget_monthly",
+      "value": "₹41,500",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:021"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Infra budget conflict ACROSS labels: team chat says about ₹41,500/month, finance chat says the cap drops to ₹24,750/month from 1 Dec. The conflict needs team AND finance clearance, so the successor sees only a stub. (side 2)",
+      "subject": "infra_budget",
+      "attribute": "budget_monthly",
+      "value": "₹24,750 from 2026-12-01",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    }
+  ],
+  "gaps": []
+}
