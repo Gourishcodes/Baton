@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Conflicts - Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s4);max-width:960px">
+  <div style="margin-bottom:var(--s6)">
+    <h1 class="h1">Conflicts</h1>
+    <p class="meta" style="margin-top:var(--s1)">Two sources assert different values for the same thing. Baton does not pick one.</p>
+  </div>
+
+  <div class="cols">
+    <article class="claim claim--conflict" role="listitem">
+      <span class="type">Decision</span>
+      <div>
+        <p class="text">The pilot launch date is 28 Nov per chat.</p>
+        <p class="note">Disagrees with task board date. The approver decides.</p>
+      </div>
+    </article>
+    <article class="claim claim--conflict" role="listitem">
+      <span class="type">Decision</span>
+      <div>
+        <p class="text">The pilot launch date is 5 Dec per task board.</p>
+        <p class="note">Disagrees with chat date. The approver decides.</p>
+      </div>
+    </article>
+  </div>
+</div>
+{% endblock %}

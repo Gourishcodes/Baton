@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Trust - Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s4);max-width:960px">
+  <div style="margin-bottom:var(--s6)">
+    <h1 class="h1">Trust</h1>
+    <p class="meta" style="margin-top:var(--s1)">Verification, leak detection, and accuracy evaluation.</p>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="counter">0</div>
+      <div class="counter-label">Planted strings found in views the role may not see</div>
+      <p class="meta" style="margin-top:var(--s2)">4 roles &times; 9 views &times; 9 strings checked. A strong check, not a proof.</p>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>Measure</th><th class="num">Result</th></tr></thead>
+      <tbody>
+        <tr><td>Recall against the answer key</td><td class="num">37 of 37</td></tr>
+        <tr><td>Claims matching a key fact</td><td class="num">39 of 41</td></tr>
+        <tr><td>Citations that resolve to a real line</td><td class="num">98%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="meta" style="margin-top:var(--s6)">Synthetic data written by the team with Claude. Small sample. Not a benchmark.</p>
+
+  <div style="margin-top:var(--s8)">
+    <h2 class="h2">Dropped by rules ({{ dropped_claims|length }})</h2>
+    <p class="meta" style="margin-top:var(--s1);margin-bottom:var(--s4)">Claims filtered out by deterministic verification rules before review.</p>
+    {% if dropped_claims %}
+    <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Claim text</th>
+          <th>Cited lines</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in dropped_claims %}
+        <tr>
+          <td>{{ d.text }}</td>
+          <td><span class="mono">{{ d.cites|map('replace', ':', '·')|join(', ') if d.cites is iterable and d.cites is not string else d.cites }}</span></td>
+          <td><span class="meta">{{ d.reason }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="meta">No claims dropped by rules.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

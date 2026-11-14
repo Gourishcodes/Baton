@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block title %}Claims - Baton{% endblock %}
+
+{% block content %}
+<div id="ledger-container" class="{% if drawer_open %}main-with-drawer{% endif %}">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s6);margin:var(--s6) 0 var(--s4);flex-wrap:wrap">
+    <div>
+      <h1 class="h1">Claims</h1>
+      <p class="meta" style="margin:var(--s1) 0 0">
+        {% if role == 'successor' %}
+        The server drew these bars. The text behind them was never sent.
+        {% elif role == 'lead' %}
+        Switch to Successor to see what they see.
+        {% else %}
+        Every claim shows how we know it. Nothing here is shared until the approver approves it.
+        {% endif %}
+      </p>
+    </div>
+    <div class="legend" aria-label="How to read the bar on the left of each claim">
+      <span class="basis basis--sourced"><span class="swatch swatch--sourced"></span>Sourced</span>
+      <span class="basis basis--attested"><span class="swatch swatch--attested"></span>Attested</span>
+      <span class="basis basis--inferred"><span class="swatch swatch--inferred"></span>Inferred</span>
+      <span class="basis basis--conflict"><span class="swatch swatch--conflict"></span>Conflict</span>
+      <span class="basis basis--unknown"><span class="swatch swatch--unknown"></span>Unknown</span>
+    </div>
+  </div>
+
+  <div class="filters" role="group" aria-label="Filter claims" style="margin-bottom:var(--s4)">
+    <button class="filter" aria-pressed="{{ 'true' if (not current_filter and not needs_review) else 'false' }}" hx-get="/case/1/claims" hx-target="#ledger-content" hx-push-url="true">All <span class="num">{{ filter_counts.all }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if needs_review else 'false' }}" hx-get="/case/1/claims?needs_review=1" hx-target="#ledger-content" hx-push-url="true">Needs review <span class="num">{{ filter_counts.needs_review }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Decision' else 'false' }}" hx-get="/case/1/claims?type=Decision" hx-target="#ledger-content" hx-push-url="true">Decision <span class="num">{{ filter_counts.Decision }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Owner' else 'false' }}" hx-get="/case/1/claims?type=Owner" hx-target="#ledger-content" hx-push-url="true">Owner <span class="num">{{ filter_counts.Owner }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Risk' else 'false' }}" hx-get="/case/1/claims?type=Risk" hx-target="#ledger-content" hx-push-url="true">Risk <span class="num">{{ filter_counts.Risk }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Dependency' else 'false' }}" hx-get="/case/1/claims?type=Dependency" hx-target="#ledger-content" hx-push-url="true">Dependency <span class="num">{{ filter_counts.Dependency }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'OpenQuestion' else 'false' }}" hx-get="/case/1/claims?type=OpenQuestion" hx-target="#ledger-content" hx-push-url="true">Open question <span class="num">{{ filter_counts.OpenQuestion }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'NextAction' else 'false' }}" hx-get="/case/1/claims?type=NextAction" hx-target="#ledger-content" hx-push-url="true">Next action <span class="num">{{ filter_counts.NextAction }}</span></button>
+  </div>
+
+  <div id="ledger-content">
+    <div class="ledger" role="list">
+      {% for item in claims %}
+        {% if item.visible %}
+          {{ m.claim_card(item, persona=role, is_selected=(open_line and open_line in item.cites|map(attribute='line_id')|list), index=loop.index0, open_line=open_line) }}
+        {% else %}
+          {{ m.redacted_claim(index=loop.index0) }}
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if restricted_count > 0 %}
+    <p class="meta" style="margin-top:var(--s3)">{{ restricted_count }} items are outside your clearance. Ask the approver, {{ case.approver or 'Divya Menon' }}.</p>
+    {% endif %}
+  </div>
+
+  {% if role == 'lead' %}
+  <p class="kbdhint"><kbd>J</kbd> <kbd>K</kbd> move &nbsp; <kbd>A</kbd> approve &nbsp; <kbd>E</kbd> edit &nbsp; <kbd>R</kbd> reject &nbsp; <kbd>Enter</kbd> open source</p>
+  {% endif %}
+</div>
+
+<div id="drawer-slot">
+  {% if drawer_html %}
+    {{ drawer_html|safe }}
+  {% else %}
+    <div id="drawer"></div>
+  {% endif %}
+</div>
+{% endblock %}

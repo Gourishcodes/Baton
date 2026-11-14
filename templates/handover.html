@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Handover Document - Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s4);max-width:680px">
+  <div style="margin-bottom:var(--s6)">
+    <h1 class="h1">Handover Document</h1>
+    <p class="meta" style="margin-top:var(--s1)">Approved handover for the successor. Filtered to your clearance.</p>
+  </div>
+
+  <div class="doc">
+    <h2>Who owns what</h2>
+    <p class="item">Arjun Rao takes over the notify/ package and the reconcile job from 9 Nov. <span class="cites"><a class="cite" href="#">N1&middot;023</a><a class="cite" href="#">C1&middot;038</a></span></p>
+    <p class="item">Divya Menon owns production deploys and access grants. <span class="cites"><a class="cite" href="#">N1&middot;007</a></span></p>
+
+    <h2>What is at risk</h2>
+    <p class="item item--conflict">The pilot launch date is 28 Nov in chat and 5 Dec on the task board. <span class="basis basis--conflict">Conflict</span> <span class="cites"><a class="cite" href="#">C1&middot;032</a><a class="cite" href="#">T1&middot;013</a></span></p>
+    {% if role == 'successor' %}
+    <div class="item item--redacted"><div class="redact redact--b" role="img" aria-label="Item outside your clearance">Restricted</div></div>
+    {% endif %}
+    <p class="item item--inferred">The reconcile job will probably fail again on 7 Dec. <span class="basis basis--inferred">Inferred</span></p>
+
+    <p class="aside">Approved by Divya Menon, version 1.</p>
+  </div>
+</div>
+{% endblock %}

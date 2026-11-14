@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block title %}Sources - Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s4);max-width:960px">
+  <div style="margin-bottom:var(--s6)">
+    <h1 class="h1">Sources</h1>
+    <p class="meta" style="margin-top:var(--s1)">Input documents for this handover case. Every claim must cite these sources.</p>
+  </div>
+
+  {% if parse_error %}
+  <div class="banner" style="margin-bottom:var(--s6)">
+    {{ parse_error }}
+  </div>
+  {% endif %}
+
+  <div style="overflow-x:auto;margin-bottom:var(--s8)">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>File</th>
+        <th>Kind</th>
+        <th>Labels</th>
+        <th class="num">Lines</th>
+        <th>SHA</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td><span class="mono"><b>{{ s.id }}</b></span></td>
+        <td>{{ s.filename }}</td>
+        <td><span class="mono">{{ s.kind }}</span></td>
+        <td>
+          {% for l in s.labels %}
+          {{ m.tag(l, is_restricted=(l in ['finance', 'hr'])) }}
+          {% endfor %}
+        </td>
+        <td class="num">{{ s.line_count }}</td>
+        <td><span class="mono">{{ s.sha256[:8] if s.sha256 else '' }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% if role == 'lead' %}
+  <div style="border-top:1px solid var(--ink);padding-top:var(--s6);max-width:480px">
+    <h2 class="h2" style="margin-bottom:var(--s4)">Upload source</h2>
+    <form method="post" action="/case/1/sources" enctype="multipart/form-data">
+      <div style="margin-bottom:var(--s3)">
+        <label class="lbl" for="source_file">File</label>
+        <input class="field field--sm" type="file" id="source_file" name="file" required style="width:100%">
+      </div>
+      <div style="margin-bottom:var(--s4)">
+        <label class="lbl" for="source_label">Access Label</label>
+        <select class="field field--sm" id="source_label" name="label" style="width:100%">
+          <option value="team">Team</option>
+          <option value="finance">Finance</option>
+          <option value="hr">HR</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn--primary">Upload source</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

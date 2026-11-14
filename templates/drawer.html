@@ -1,0 +1,21 @@
+<aside class="drawer" id="drawer" aria-label="Source">
+  <header>
+    <div>
+      <div class="file">{{ source.filename }}</div>
+      <div class="meta">Source {{ source.id }} &middot; cited by {{ cite_count }} claim{% if cite_count != 1 %}s{% endif %}</div>
+    </div>
+    <div style="display:flex;gap:var(--s2);align-items:center">
+      <span class="tag{% if source.labels[0] in ['finance', 'hr'] %} tag--restricted{% endif %}">{{ source.labels[0]|capitalize }}</span>
+      <button class="btn btn--quiet" style="height:28px" onclick="document.getElementById('drawer')?.remove(); document.getElementById('ledger-container')?.classList.remove('main-with-drawer');">Close</button>
+    </div>
+  </header>
+  <div>
+    {% for l in lines %}
+    <div class="srcline{% if l.line_id == target_line_id %} srcline--cited{% endif %}" id="line-{{ l.line_id.replace(':', '-') }}">
+      <div class="n">{{ "%03d"|format(l.n) }}</div>
+      <div class="t">{{ l.text }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <footer class="meta">Line IDs are fixed when the file is read: <span class="mono">{{ target_line_id.replace(':', '·') }}</span> always means this line.</footer>
+</aside>

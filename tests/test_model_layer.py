@@ -172,9 +172,9 @@ class TestCacheOnlyZeroNetworkCalls:
 class TestEvalPipeline:
     """SPEC 12: eval runs from fixtures with no model and prints report."""
 
-    def test_eval_runs_from_fixtures(self):
+    def test_eval_runs_from_fixtures(self, tmp_path):
         """Run eval in cache_only mode from fixtures and check all expected outputs."""
-        results = app_eval.run_eval(mode="cache_only")
+        results = app_eval.run_eval(mode="cache_only", cache_dir=str(tmp_path))
 
         assert "recall" in results
         assert "precision" in results

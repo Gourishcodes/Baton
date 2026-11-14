@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s8);max-width:680px">
+  <h1 class="h1" style="margin-bottom:var(--s6)">Baton</h1>
+
+  <p style="font-size:16px;line-height:24px;margin:0 0 var(--s2)">Every claim shows how we know it.</p>
+  <p style="font-size:16px;line-height:24px;margin:0 0 var(--s2)">Anything we do not know, we ask the leaver.</p>
+  <p style="font-size:16px;line-height:24px;margin:0 0 var(--s8)">Anyone who should not see it, does not.</p>
+
+  <div style="display:flex;gap:var(--s3);margin-bottom:var(--s8)">
+    <form method="post" action="/demo/open" style="display:inline">
+      <button type="submit" class="btn btn--primary">Open the demo case</button>
+    </form>
+    <a href="/case/1/sources" class="btn">Start a new case</a>
+  </div>
+
+  <div class="banner">
+    Synthetic data only. Free-tier models may log inputs. Role switch is for demo evaluation, not authentication.
+  </div>
+</div>
+{% endblock %}

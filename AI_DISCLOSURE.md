@@ -22,4 +22,22 @@ Every module below was written or substantially shaped by AI (Antigravity / Clau
 - `tests/test_access.py` — Test 5: access.visible truth table for all personas and label sets.
 - `tests/test_review.py` — Tests 6 & 7: sticky decisions, Jaccard matching, cross-label conflict visibility.
 - `tests/test_model_layer.py` — Tests for schema validation retry, provider fallback, zero-network cache_only, and eval execution.
+- `app/middleware.py` — WireCheckMiddleware enforcing fail-closed scanning for canary strings on HTML responses and injecting wire audit strip.
+- `app/main.py` — FastAPI application routes for home, role switching, demo open/reset, sources, claims, drawer partials, and tab stubs.
+- `static/baton.js` — Vanilla JS keyboard navigation (J/K/A/E/R/Enter) under 60 lines for Approver persona.
+- `templates/base.html` — Base layout shell: skip link, top bar with SVG wordmark and persona radiogroup, tabs, and wire strip.
+- `templates/_macros.html` — Jinja macros for claim, cite, tag, status, redacted_claim, srcline, and wire.
+- `templates/home.html` — Home landing page with one-click demo launcher per DESIGN.md section 5.
+- `templates/claims.html` — Claims ledger view with filter pills, status badges, server-drawn redaction stubs, and source drawer.
+- `templates/sources.html` — Sources listing with upload form for Approver and responsive table.
+- `templates/drawer.html` — Source drawer partial rendering cited file lines and highlighting target line.
+- `templates/gaps.html` — Stub template for Gaps view.
+- `templates/conflicts.html` — Stub template for Conflicts view.
+- `templates/timeline.html` — Stub template for Timeline view.
+- `templates/handover.html` — Stub template for Handover document view.
+- `templates/approvals.html` — Stub template for Approvals view.
+- `templates/trust.html` — Stub template for Trust view.
+- `scripts/capture_screenshots.py` — Playwright script to capture full-page audit screenshots at 1440w and 390w.
+- `tests/test_tab_counts.py` — Test 8: persona-filtered tab counts equal openable rows for every persona.
+- `tests/test_drawer_centering.py` — Playwright test asserting drawer opens on ?open_cite=, gives srcline--cited, and centers line vertically.
 - `requirements.txt` — Pinned dependency versions.

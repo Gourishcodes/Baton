@@ -1,0 +1,113 @@
+{# Baton Jinja macros - source of truth is docs/design-reference.html #}
+
+{% macro tag(name, is_restricted=false) -%}
+<span class="tag{% if is_restricted %} tag--restricted{% endif %}">{{ name|capitalize }}</span>
+{%- endmacro %}
+
+{% macro cite(cid, claim_id=1, is_expanded=false) -%}
+<a class="cite" href="/case/1/claims/{{ claim_id }}/source?line={{ cid }}" hx-get="/case/1/claims/{{ claim_id }}/source?line={{ cid }}" hx-target="#drawer" {% if is_expanded %}aria-expanded="true"{% endif %}>{{ cid.replace(':', '·') }}</a>
+{%- endmacro %}
+
+{% macro status(st) -%}
+<span class="status status--{{ st }}">{{ st|capitalize }}</span>
+{%- endmacro %}
+
+{% macro redacted_claim(index=0) -%}
+{% set width_class = ['a', 'b', 'c'][index % 3] %}
+<article class="claim claim--redacted" role="listitem">
+  <span class="type">&nbsp;</span>
+  <div><div class="redact redact--{{ width_class }}" role="img" aria-label="Item outside your clearance">Restricted</div></div>
+</article>
+{%- endmacro %}
+
+{% macro srcline(line, is_cited=false) -%}
+<div class="srcline{% if is_cited %} srcline--cited{% endif %}" id="line-{{ line.line_id.replace(':', '-') }}">
+  <div class="n">{{ "%03d"|format(line.n) }}</div>
+  <div class="t">{{ line.text }}</div>
+</div>
+{%- endmacro %}
+
+{% macro wire(scanned_count=9, present_count=0, role_name="Successor", clearance="team", is_lead=false) -%}
+<div class="wire" style="margin-top:var(--s8)">
+  <span class="label">Wire check</span>
+  {% if is_lead %}
+  <span>This role is cleared for all 9 planted strings, so nothing is blocked here.</span>
+  <span>Role: Approver &middot; clearance: team, finance, hr</span>
+  {% else %}
+  <span>This response was scanned for <strong>{{ scanned_count }}</strong> planted strings: <strong>{{ present_count }}</strong> present.</span>
+  <span>Role: {{ role_name }} &middot; clearance: {{ clearance }}</span>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro claim_card(claim, persona='lead', is_selected=false, index=0, open_line=None) -%}
+{% set basis_class = 'claim--' ~ claim.basis %}
+{% set is_conflict = claim.flags.get('conflict_with') %}
+{% set is_superseded = claim.flags.get('superseded_by') %}
+{% set dec = claim.decision.decision if claim.decision else 'pending' %}
+{% set is_rejected = (dec == 'rejected') %}
+
+<article class="claim {{ 'claim--conflict' if is_conflict else basis_class }} {% if is_superseded %}claim--superseded{% endif %} {% if is_rejected %}claim--rejected{% endif %}" role="listitem" id="claim-{{ claim.id }}" {% if is_selected %}aria-selected="true"{% endif %}>
+  <span class="type">{{ claim.type }}</span>
+  <div>
+    <p class="text">{{ claim.decision.edited_text if (claim.decision and claim.decision.edited_text) else claim.text }}</p>
+    {% if is_superseded %}
+      {% if claim.attribute and claim.value %}
+      <p class="note mono">{{ claim.attribute }}: {{ claim.value }}</p>
+      {% endif %}
+      <p class="note">Superseded by the claim at {{ claim.superseded_by_cite or 'another claim' }}. Shown for history; not a current decision.</p>
+    {% elif is_conflict %}
+      {% if claim.attribute and claim.value %}
+      <p class="note mono">{{ claim.attribute }}: {{ claim.value }}</p>
+      {% endif %}
+      <p class="note">Disagrees with the claim at {{ claim.conflict_cite or 'another claim' }}. Baton does not pick one. The approver decides.</p>
+    {% elif claim.flags.get('possibly_previously_rejected') %}
+    <p class="note">Possibly previously rejected. Check before approving.</p>
+    {% elif claim.basis == 'inferred' %}
+    <p class="note">A guess. No source line says this.</p>
+    {% elif claim.basis == 'attested' %}
+    <p class="note">Attested by {{ claim.attested_by or 'Leaver' }}. No source line exists.</p>
+    {% endif %}
+
+    <div class="rowfoot">
+      {% if is_conflict %}
+      <span class="basis basis--conflict">Conflict</span>
+      {% else %}
+      <span class="basis basis--{{ claim.basis }}">{{ claim.basis|capitalize }}</span>
+      {% endif %}
+
+      {% for lbl in claim.labels %}
+      <span class="tag{% if lbl in ['finance', 'hr'] %} tag--restricted{% endif %}">{{ lbl|capitalize }}</span>
+      {% endfor %}
+
+      <span class="status status--{{ dec }}">{{ dec|capitalize }}</span>
+
+      <span class="cites">
+        {% for c in claim.cites %}
+        <a class="cite" href="/case/1/claims/{{ claim.id }}/source?line={{ c.line_id }}" hx-get="/case/1/claims/{{ claim.id }}/source?line={{ c.line_id }}" hx-target="#drawer-slot" {% if open_line == c.line_id %}aria-expanded="true"{% endif %}>{{ c.line_id.replace(':', '·') }}</a>
+        {% endfor %}
+      </span>
+
+      {% if persona == 'lead' %}
+      <span class="acts">
+        {% if dec == 'pending' %}
+        <button class="btn btn--primary" hx-post="/case/1/claims/{{ claim.id }}/decision?action=approve" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Approve</button>
+        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=edit" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Edit</button>
+        <button class="btn btn--danger" hx-post="/case/1/claims/{{ claim.id }}/decision?action=reject" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Reject</button>
+        {% elif dec == 'rejected' %}
+        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=restore" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Restore</button>
+        {% else %}
+        {# approved or edited #}
+        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=edit" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Edit</button>
+        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=reject" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Reject</button>
+        {% endif %}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+</article>
+{%- endmacro %}
+
+{% macro claim(claim_data, persona='lead', is_selected=false, index=0, open_line=None) -%}
+{{ claim_card(claim_data, persona=persona, is_selected=is_selected, index=index, open_line=open_line) }}
+{%- endmacro %}

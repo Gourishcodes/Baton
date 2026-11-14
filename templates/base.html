@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Baton{% endblock %}</title>
+<link rel="stylesheet" href="/static/baton.css">
+<script src="/static/vendor/htmx.min.js"></script>
+<script src="/static/baton.js"></script>
+</head>
+<body data-role="{{ role or 'lead' }}">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="wordmark" href="/">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 0H14L0 14Z" fill="#151512"/><path d="M13.5 .5V13.5H.5Z" fill="none" stroke="#151512"/></svg>
+      Baton
+    </a>
+    {% if case %}
+    <div class="casename"><b>{{ case.name }}</b> &nbsp;{{ case.leaver }} to {{ case.successor }} &nbsp;&middot;&nbsp; {{ case.leaver.split()[0] if case.leaver else 'Meera' }} leaves in 14 days</div>
+    {% endif %}
+    <div class="spacer"></div>
+    <form method="post" action="/role" class="persona" role="radiogroup" aria-label="Viewing as">
+      <button type="submit" name="role" value="leaver" role="radio" aria-checked="{{ 'true' if (role == 'leaver') else 'false' }}">Leaver</button>
+      <button type="submit" name="role" value="lead" role="radio" aria-checked="{{ 'true' if (role == 'lead') else 'false' }}">Approver</button>
+      <button type="submit" name="role" value="successor" role="radio" aria-checked="{{ 'true' if (role == 'successor') else 'false' }}">Successor</button>
+    </form>
+    <div class="notauth">Role switch for the demo. Not authentication.</div>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding-top:var(--s6);padding-bottom:var(--s16)">
+  {% if case or active_tab %}
+  <nav class="tabs" aria-label="Case">
+    <a href="/case/1/sources" {% if active_tab == 'sources' %}aria-current="page"{% endif %}>Sources <span class="num">{{ counts.sources }}</span></a>
+    <a href="/case/1/claims" {% if active_tab == 'claims' %}aria-current="page"{% endif %}>Claims <span class="num">{{ counts.claims }}</span></a>
+    <a href="/case/1/gaps" {% if active_tab == 'gaps' %}aria-current="page"{% endif %}>Gaps <span class="num">{{ counts.gaps }}</span></a>
+    <a href="/case/1/conflicts" {% if active_tab == 'conflicts' %}aria-current="page"{% endif %}>Conflicts <span class="num">{{ counts.conflicts }}</span></a>
+    <a href="/case/1/timeline" {% if active_tab == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
+    <a href="/case/1/handover" {% if active_tab == 'handover' %}aria-current="page"{% endif %}>Handover <span class="num">v{{ counts.version or 1 }}</span></a>
+    <a href="/case/1/approvals" {% if active_tab == 'approvals' %}aria-current="page"{% endif %}>Approvals <span class="num">{{ counts.approvals }}</span></a>
+    <a href="/trust" {% if active_tab == 'trust' %}aria-current="page"{% endif %}>Trust</a>
+  </nav>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+
+  <!-- WIRE_STRIP -->
+</main>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Approvals - Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s4);max-width:840px">
+  <div style="margin-bottom:var(--s6)">
+    <h1 class="h1">Approvals</h1>
+    <p class="meta" style="margin-top:var(--s1)">Snapshot history of approved handovers.</p>
+  </div>
+
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Version</th>
+        <th>Approved By</th>
+        <th>Approved At</th>
+        <th class="num">Claims</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>v1</b></td>
+        <td>Divya Menon</td>
+        <td>2026-11-13 12:40</td>
+        <td class="num">37</td>
+        <td>Seeded</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -407,6 +407,84 @@ def validate_gap_cites(gap_id: int, call_labels: set[str], conn=None) -> int:
     return valid_count
 
 
+def drop_closed_task_claims(case_id: int, run_id: int, conn=None) -> list[dict]:
+    """A NextAction claim whose cites are all task-board rows with status Done
+    or Cancelled is dropped.
+
+    Record each drop with claim text, cited lines and reason 'cites only closed tasks'.
+    Returns list of dropped records.
+    """
+    if conn is None:
+        conn = db.get_conn()
+
+    claims = conn.execute(
+        "SELECT id, text, type FROM claims WHERE case_id = ? AND run_id = ?",
+        (case_id, run_id)
+    ).fetchall()
+
+    dropped = []
+    for claim in claims:
+        if claim["type"] != "NextAction":
+            continue
+
+        claim_id = claim["id"]
+        cites = conn.execute(
+            "SELECT line_id FROM claim_cites WHERE claim_id = ?",
+            (claim_id,)
+        ).fetchall()
+
+        if not cites:
+            continue
+
+        all_closed = True
+        cited_lines = []
+
+        for cite in cites:
+            line_id = cite["line_id"]
+            cited_lines.append(line_id)
+
+            line = conn.execute(
+                "SELECT l.text, s.kind FROM lines l JOIN sources s ON l.source_id = s.id WHERE l.line_id = ?",
+                (line_id,)
+            ).fetchone()
+
+            if not line:
+                all_closed = False
+                break
+
+            # Must be a task-board row
+            is_task_board = (line["kind"] == "csv") or ("status=" in line["text"])
+            if not is_task_board:
+                all_closed = False
+                break
+
+            # Parse status
+            fields = {}
+            for part in line["text"].split(" | "):
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    fields[k.strip().lower()] = v.strip()
+
+            status = fields.get("status", "")
+            if status not in ("Done", "Cancelled"):
+                all_closed = False
+                break
+
+        if all_closed:
+            reason = "cites only closed tasks"
+            db.insert_dropped_claim(case_id, run_id, claim["text"], cited_lines, reason, conn=conn)
+            conn.execute("DELETE FROM claim_cites WHERE claim_id = ?", (claim_id,))
+            conn.execute("DELETE FROM claims WHERE id = ?", (claim_id,))
+            dropped.append({
+                "text": claim["text"],
+                "cites": cited_lines,
+                "reason": reason,
+            })
+
+    conn.commit()
+    return dropped
+
+
 def run_verification_pipeline(case_id: int, run_id: int, call_label_sets: dict[str, set[str]],
                               conn=None):
     """Run the full verification pipeline on a completed extraction run.
@@ -435,6 +513,9 @@ def run_verification_pipeline(case_id: int, run_id: int, call_label_sets: dict[s
         validate_cites(claim["id"], call_labels, conn)
         assign_basis(claim["id"], conn)
         compute_identity(claim["id"], conn)
+
+    # 1b. Drop NextAction claims citing only closed tasks
+    drop_closed_task_claims(case_id, run_id, conn)
 
     # 2. Detect supersession
     detect_supersession(run_id, case_id, conn)

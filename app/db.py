@@ -6,6 +6,7 @@ import json
 import hashlib
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
@@ -141,10 +142,19 @@ CREATE TABLE IF NOT EXISTS audit (
     action TEXT NOT NULL,
     target TEXT
 );
+
+CREATE TABLE IF NOT EXISTS dropped_claims (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id INTEGER NOT NULL REFERENCES cases(id),
+    run_id INTEGER REFERENCES runs(id),
+    text TEXT NOT NULL,
+    cites TEXT NOT NULL,  -- JSON array
+    reason TEXT NOT NULL
+);
 """
 
+_local = threading.local()
 _db_path: str | None = None
-_conn: sqlite3.Connection | None = None
 
 
 def get_db_path() -> str:
@@ -156,38 +166,35 @@ def get_db_path() -> str:
 
 def set_db_path(path: str):
     """Set the database path. Closes any existing connection."""
-    global _db_path, _conn
-    if _conn is not None:
-        _conn.close()
-        _conn = None
+    global _db_path
+    close()
     _db_path = path
 
 
 def get_conn() -> sqlite3.Connection:
     """Get a database connection, creating the schema if needed."""
-    global _conn
-    if _conn is None:
-        _conn = sqlite3.connect(get_db_path())
-        _conn.row_factory = sqlite3.Row
-        _conn.execute("PRAGMA journal_mode=WAL")
-        _conn.execute("PRAGMA foreign_keys=ON")
-        _conn.executescript(SCHEMA)
-    return _conn
+    if not hasattr(_local, "conn") or _local.conn is None:
+        _local.conn = sqlite3.connect(get_db_path(), check_same_thread=False)
+        _local.conn.row_factory = sqlite3.Row
+        _local.conn.execute("PRAGMA journal_mode=WAL")
+        _local.conn.execute("PRAGMA foreign_keys=ON")
+        _local.conn.executescript(SCHEMA)
+    return _local.conn
 
 
 def close():
-    global _conn
-    if _conn is not None:
-        _conn.close()
-        _conn = None
+    if hasattr(_local, "conn") and _local.conn is not None:
+        try:
+            _local.conn.close()
+        except Exception:
+            pass
+        _local.conn = None
 
 
 def reset():
     """Reset the module state (for testing)."""
-    global _db_path, _conn
-    if _conn is not None:
-        _conn.close()
-    _conn = None
+    global _db_path
+    close()
     _db_path = None
 
 
@@ -356,3 +363,18 @@ def update_claim_basis(claim_id: int, basis: str):
     conn = get_conn()
     conn.execute("UPDATE claims SET basis = ? WHERE id = ?", (basis, claim_id))
     conn.commit()
+
+
+def insert_dropped_claim(case_id: int, run_id: int, text: str, cites: list[str],
+                         reason: str, conn=None) -> int:
+    """Insert a record of a dropped claim."""
+    if conn is None:
+        conn = get_conn()
+    cites_json = json.dumps(cites)
+    cur = conn.execute(
+        "INSERT INTO dropped_claims (case_id, run_id, text, cites, reason) VALUES (?, ?, ?, ?, ?)",
+        (case_id, run_id, text, cites_json, reason)
+    )
+    conn.commit()
+    return cur.lastrowid
+

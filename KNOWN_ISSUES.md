@@ -1,6 +1,5 @@
 # Known Issues
 
-- UI layer and HTML templates not yet built (scheduled for Prompt 3).
-- Wire-check middleware for HTML responses not yet built (scheduled for Prompt 3).
-- Live cache in `demo_cache/` needs to be generated once with user API key via `python scripts/build_cache.py`.
-- Automated leak test across routes not yet built (scheduled for Prompt 4).
+- Decision actions (approve/edit/reject form POST handler and sticky decision updates) to be fully connected on backend in Prompt 4.
+- Automated leak test across all routes and roles to be built in Prompt 4.
+- Remaining feature tabs (Gaps, Conflicts, Timeline, Handover, Approvals, Trust) currently have compliant shell stubs; full interactive logic scheduled for upcoming prompts.

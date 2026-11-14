@@ -67,6 +67,15 @@ def get_claims(case_id: int, persona: str, type_filter: str = None,
     query += " ORDER BY id"
     rows = conn.execute(query, params).fetchall()
 
+    first_cites_rows = conn.execute(
+        "SELECT claim_id, line_id FROM claim_cites ORDER BY claim_id, rowid"
+    ).fetchall()
+    first_cite_by_claim = {}
+    for r in first_cites_rows:
+        cid = r["claim_id"]
+        if cid not in first_cite_by_claim:
+            first_cite_by_claim[cid] = r["line_id"].replace(":", "·")
+
     result = []
     for row in rows:
         labels = json.loads(row["labels"])
@@ -77,6 +86,19 @@ def get_claims(case_id: int, persona: str, type_filter: str = None,
             d["labels"] = labels
             d["flags"] = json.loads(row["flags"])
             d["visible"] = True
+
+            conflict_with = d["flags"].get("conflict_with")
+            if conflict_with and isinstance(conflict_with, list) and len(conflict_with) > 0:
+                other_cid = conflict_with[0]
+                d["conflict_cite"] = first_cite_by_claim.get(other_cid, "")
+
+            superseded_by = d["flags"].get("superseded_by")
+            if superseded_by:
+                d["superseded_by_cite"] = first_cite_by_claim.get(superseded_by, "")
+
+            supersedes = d["flags"].get("supersedes")
+            if supersedes:
+                d["supersedes_cite"] = first_cite_by_claim.get(supersedes, "")
 
             # Get cites
             cites = conn.execute(
@@ -143,6 +165,31 @@ def get_claim(case_id: int, claim_id: int, persona: str):
     else:
         d["decision"] = None
 
+    conflict_with = d["flags"].get("conflict_with")
+    if conflict_with and isinstance(conflict_with, list) and len(conflict_with) > 0:
+        other_cid = conflict_with[0]
+        other_cite = conn.execute(
+            "SELECT line_id FROM claim_cites WHERE claim_id = ? ORDER BY rowid LIMIT 1",
+            (other_cid,)
+        ).fetchone()
+        d["conflict_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+
+    superseded_by = d["flags"].get("superseded_by")
+    if superseded_by:
+        other_cite = conn.execute(
+            "SELECT line_id FROM claim_cites WHERE claim_id = ? ORDER BY rowid LIMIT 1",
+            (superseded_by,)
+        ).fetchone()
+        d["superseded_by_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+
+    supersedes = d["flags"].get("supersedes")
+    if supersedes:
+        other_cite = conn.execute(
+            "SELECT line_id FROM claim_cites WHERE claim_id = ? ORDER BY rowid LIMIT 1",
+            (supersedes,)
+        ).fetchone()
+        d["supersedes_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+
     return d
 
 
@@ -192,12 +239,6 @@ def get_gaps(case_id: int, persona: str):
                 d["answer_claim"] = None
 
             result.append(d)
-        else:
-            result.append({
-                "id": row["id"],
-                "visible": False,
-                "labels": labels,
-            })
 
     return result
 
@@ -243,12 +284,6 @@ def get_conflicts(case_id: int, persona: str):
             d["claim_a_data"] = get_claim(case_id, row["claim_a"], persona)
             d["claim_b_data"] = get_claim(case_id, row["claim_b"], persona)
             result.append(d)
-        else:
-            result.append({
-                "id": row["id"],
-                "visible": False,
-                "labels": labels,
-            })
 
     return result
 
@@ -323,3 +358,19 @@ def get_latest_run(case_id: int):
         (case_id,)
     ).fetchone()
     return dict(row) if row else None
+
+
+def get_dropped_claims(case_id: int, persona: str = None):
+    """Get dropped claims recorded during verification."""
+    conn = db.get_conn()
+    rows = conn.execute(
+        "SELECT * FROM dropped_claims WHERE case_id = ? ORDER BY id",
+        (case_id,)
+    ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["cites"] = json.loads(r["cites"])
+        result.append(d)
+    return result
+

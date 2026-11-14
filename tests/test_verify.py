@@ -357,3 +357,89 @@ class TestDeterministicGaps:
             # None of these should be for Done or Cancelled tasks
             assert "T-03" not in gap["question"]
             assert "T-05" not in gap["question"]
+
+
+class TestDropClosedTasks:
+    """Test dropping NextAction claims citing only closed tasks."""
+
+    def test_drop_closed_tasks_rule(self, demo_case):
+        """NextAction claims whose cites are all Done or Cancelled tasks must be dropped."""
+        case_id = demo_case
+        run_id = db.insert_run(case_id)
+
+        # 1. Closed task (T1:001 is Done) -> Should be dropped
+        c1 = db.insert_claim(case_id, run_id, {
+            "type": "NextAction",
+            "text": "Closed action done",
+            "basis": "sourced",
+            "labels": ["team"],
+            "cites": ["T1:001"],
+        })
+
+        # 2. Closed task (T1:002 is Cancelled) -> Should be dropped
+        c2 = db.insert_claim(case_id, run_id, {
+            "type": "NextAction",
+            "text": "Closed action cancelled",
+            "basis": "sourced",
+            "labels": ["team"],
+            "cites": ["T1:002"],
+        })
+
+        # 3. Active task (T1:008 is In progress) -> Must NOT be dropped
+        c3 = db.insert_claim(case_id, run_id, {
+            "type": "NextAction",
+            "text": "Active task in progress",
+            "basis": "sourced",
+            "labels": ["team"],
+            "cites": ["T1:008"],
+        })
+
+        # 4. Non-NextAction claim (Decision citing T1:001) -> Must NOT be dropped
+        c4 = db.insert_claim(case_id, run_id, {
+            "type": "Decision",
+            "text": "Postgres was chosen",
+            "basis": "sourced",
+            "labels": ["team"],
+            "cites": ["T1:001"],
+        })
+
+        # 5. Mixed cite (T1:001 and chat line C1:004) -> Must NOT be dropped
+        c5 = db.insert_claim(case_id, run_id, {
+            "type": "NextAction",
+            "text": "Mixed cite action",
+            "basis": "sourced",
+            "labels": ["team"],
+            "cites": ["T1:001", "C1:004"],
+        })
+
+        dropped = verify.drop_closed_task_claims(case_id, run_id)
+        assert len(dropped) == 2
+        assert dropped[0]["text"] == "Closed action done"
+        assert dropped[0]["cites"] == ["T1:001"]
+        assert dropped[0]["reason"] == "cites only closed tasks"
+        assert dropped[1]["text"] == "Closed action cancelled"
+        assert dropped[1]["cites"] == ["T1:002"]
+        assert dropped[1]["reason"] == "cites only closed tasks"
+
+        conn = db.get_conn()
+        remaining = conn.execute(
+            "SELECT id FROM claims WHERE case_id = ? AND run_id = ?",
+            (case_id, run_id)
+        ).fetchall()
+        remaining_ids = {r["id"] for r in remaining}
+
+        assert c1 not in remaining_ids
+        assert c2 not in remaining_ids
+        assert c3 in remaining_ids
+        assert c4 in remaining_ids
+        assert c5 in remaining_ids
+
+        # Check dropped_claims table
+        dc_rows = conn.execute(
+            "SELECT text, cites, reason FROM dropped_claims WHERE case_id = ?",
+            (case_id,)
+        ).fetchall()
+        assert len(dc_rows) == 2
+        assert json.loads(dc_rows[0]["cites"]) == ["T1:001"]
+        assert dc_rows[0]["reason"] == "cites only closed tasks"
+
