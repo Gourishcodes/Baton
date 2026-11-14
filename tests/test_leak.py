@@ -12,7 +12,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from app import db, extract, review
+from app import db, extract, review, repo
 from app.leaktest import run_leak_test
 
 
@@ -160,3 +160,113 @@ class TestLeakTest:
 
         # 4. Assert "A strong check, not a proof." is kept
         assert "A strong check, not a proof." in resp.text
+
+    def test_post_leak_test_shows_table_and_timestamp_preserves_claims(self):
+        """After POST /trust/leak-test, /trust shows persona table, positive-controls, timestamp, and preserves claims."""
+        from starlette.testclient import TestClient
+        from app.main import app
+        import re
+
+        # Ensure demo case is loaded and seeded in current DB
+        db.load_demo_case()
+        extract.extract_for_case(1, mode="cache_only")
+        review.seed_demo_decisions(1)
+        review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
+
+        lead_claims_before = len(repo.get_claims(1, "lead"))
+        lead_gaps_before = len(repo.get_gaps(1, "lead"))
+        case_status_before = repo.get_case(1, "lead")["status"]
+        assert lead_claims_before > 0
+
+        client = TestClient(app)
+
+        # Standard POST + redirect
+        resp = client.post("/trust/leak-test", follow_redirects=True)
+        assert resp.status_code == 200
+
+        # Assert persona table exists with columns and personas
+        assert "Persona" in resp.text
+        assert "Strings scanned" in resp.text
+        assert "leaver" in resp.text
+        assert "successor" in resp.text
+        assert "lead" in resp.text
+        assert "finance_ops" in resp.text
+
+        # Assert positive-controls line
+        assert "Positive controls:" in resp.text
+        assert "expected canaries present" in resp.text
+
+        # Assert timestamp (run at HH:MM:SS)
+        assert re.search(r"run at \d{2}:\d{2}:\d{2}", resp.text) is not None
+
+        # Assert HTMX partial swap returns result block
+        hx_resp = client.post("/trust/leak-test", headers={"HX-Request": "true"})
+        assert hx_resp.status_code == 200
+        assert "Persona" in hx_resp.text
+        assert "Positive controls:" in hx_resp.text
+        assert re.search(r"run at \d{2}:\d{2}:\d{2}", hx_resp.text) is not None
+
+        # Never use the word "safe"
+        assert "safe" not in resp.text.lower()
+        assert "safe" not in hx_resp.text.lower()
+
+        # Assert claim counts and state for lead are unchanged
+        lead_claims_after = len(repo.get_claims(1, "lead"))
+        lead_gaps_after = len(repo.get_gaps(1, "lead"))
+        case_status_after = repo.get_case(1, "lead")["status"]
+
+        assert lead_claims_after == lead_claims_before
+        assert lead_gaps_after == lead_gaps_before
+        assert case_status_after == case_status_before
+
+    def test_post_eval_shows_table_and_timestamp_preserves_claims(self):
+        """After POST /trust/eval, /trust shows recall/precision/TR01-TR07 rows, timestamp, and preserves claims."""
+        from starlette.testclient import TestClient
+        from app.main import app
+        import re
+
+        # Ensure demo case is loaded and seeded in current DB
+        db.load_demo_case()
+        extract.extract_for_case(1, mode="cache_only")
+        review.seed_demo_decisions(1)
+        review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
+
+        lead_claims_before = len(repo.get_claims(1, "lead"))
+        lead_gaps_before = len(repo.get_gaps(1, "lead"))
+        case_status_before = repo.get_case(1, "lead")["status"]
+        assert lead_claims_before > 0
+
+        client = TestClient(app)
+
+        # Standard POST + redirect
+        resp = client.post("/trust/eval", follow_redirects=True)
+        assert resp.status_code == 200
+
+        # Assert recall, precision, and TR01 to TR07 rows
+        assert "Recall against the answer key" in resp.text
+        assert "Claims matching a key fact" in resp.text
+        assert "TR01: superseded decision" in resp.text
+        assert "TR07: untracked promise" in resp.text
+
+        # Assert timestamp (run at HH:MM:SS)
+        assert re.search(r"run at \d{2}:\d{2}:\d{2}", resp.text) is not None
+
+        # Assert HTMX partial swap returns result block
+        hx_resp = client.post("/trust/eval", headers={"HX-Request": "true"})
+        assert hx_resp.status_code == 200
+        assert "Recall against the answer key" in hx_resp.text
+        assert "TR01: superseded decision" in hx_resp.text
+        assert re.search(r"run at \d{2}:\d{2}:\d{2}", hx_resp.text) is not None
+
+        # Never use the word "safe"
+        assert "safe" not in resp.text.lower()
+        assert "safe" not in hx_resp.text.lower()
+
+        # Assert claim counts and state for lead are unchanged
+        lead_claims_after = len(repo.get_claims(1, "lead"))
+        lead_gaps_after = len(repo.get_gaps(1, "lead"))
+        case_status_after = repo.get_case(1, "lead")["status"]
+
+        assert lead_claims_after == lead_claims_before
+        assert lead_gaps_after == lead_gaps_before
+        assert case_status_after == case_status_before

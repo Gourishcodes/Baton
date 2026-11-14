@@ -364,6 +364,8 @@ def run_leak_test(verbose: bool = True):
             pass
         if old_path:
             db.set_db_path(old_path)
+        else:
+            db.reset()
         if old_env_db:
             os.environ["BATON_DB"] = old_env_db
         elif "BATON_DB" in os.environ:

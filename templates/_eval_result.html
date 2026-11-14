@@ -1,0 +1,30 @@
+<div class="card" style="margin-top:var(--s4);padding:var(--s4);border:1px solid var(--border)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--s2)">
+    <h3 style="font-weight:600;font-size:15px">Accuracy check result</h3>
+    <span class="meta">run at {{ last_eval_run.timestamp }}</span>
+  </div>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Measure</th>
+        <th class="num">Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Recall against the answer key</td>
+        <td class="num">{{ last_eval_run.results.recall.matched }} of {{ last_eval_run.results.recall.total }}</td>
+      </tr>
+      <tr>
+        <td>Claims matching a key fact</td>
+        <td class="num">{{ last_eval_run.results.precision.matched }} of {{ last_eval_run.results.precision.total }}</td>
+      </tr>
+      {% for trap in last_eval_run.results.traps %}
+      <tr>
+        <td>{{ trap.id }}: {{ trap.name }}</td>
+        <td class="num">{{ "Pass" if trap.pass else "Fail" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -66,11 +66,23 @@
 
   <div style="margin-top:var(--s8);display:flex;gap:var(--s4)">
     <form method="post" action="/trust/leak-test">
-      <button class="btn" type="submit">Run leak test</button>
+      <button class="btn" type="submit" hx-post="/trust/leak-test" hx-target="#leak-test-result" hx-swap="innerHTML">Run leak test</button>
     </form>
     <form method="post" action="/trust/eval">
-      <button class="btn" type="submit">Run accuracy check</button>
+      <button class="btn" type="submit" hx-post="/trust/eval" hx-target="#eval-result" hx-swap="innerHTML">Run accuracy check</button>
     </form>
+  </div>
+
+  <div id="leak-test-result">
+    {% if last_leak_run %}
+      {% include "_leak_test_result.html" %}
+    {% endif %}
+  </div>
+
+  <div id="eval-result">
+    {% if last_eval_run %}
+      {% include "_eval_result.html" %}
+    {% endif %}
   </div>
 </div>
 {% endblock %}

@@ -3,6 +3,7 @@
 Follows docs/SPEC.md sections 10, 7, and docs/DESIGN.md.
 """
 from contextlib import asynccontextmanager
+from datetime import datetime
 import json
 import os
 from typing import Annotated
@@ -629,6 +630,8 @@ _cached_eval_results = None
 _cached_leak_results = None
 _cached_leak_total = 0
 _leak_test_running = False
+_last_leak_run = None
+_last_eval_run = None
 
 
 def get_cached_eval():
@@ -696,6 +699,8 @@ def trust_view(request: Request):
             "leak_total": leak_total,
             "leak_scanned_summary": leak_scanned_summary,
             "eval_results": eval_results,
+            "last_leak_run": _last_leak_run,
+            "last_eval_run": _last_eval_run,
         }
     )
 
@@ -703,17 +708,75 @@ def trust_view(request: Request):
 @app.post("/trust/leak-test")
 def trust_leak_test(request: Request):
     """Run the leak test live and stream/redirect."""
-    global _cached_leak_results, _cached_leak_total
+    global _cached_leak_results, _cached_leak_total, _last_leak_run
     from . import leaktest as lt
-    _cached_leak_results = lt.run_leak_test(verbose=False)
-    _cached_leak_total = _cached_leak_results["total_found"]
+    res = lt.run_leak_test(verbose=False)
+    _cached_leak_results = res
+    _cached_leak_total = res["total_found"]
+
+    persona_totals = {}
+    for row in res["rows"]:
+        p = row["persona"]
+        persona_totals.setdefault(p, {"scanned": 0, "found": 0})
+        persona_totals[p]["scanned"] += row["forbidden_count"]
+        persona_totals[p]["found"] += row["found"]
+
+    persona_table = []
+    for p in ["leaver", "successor", "lead", "finance_ops"]:
+        if p in persona_totals:
+            vcount = sum(1 for r in res["rows"] if r["persona"] == p)
+            persona_table.append({
+                "persona": p,
+                "views": vcount,
+                "scanned": persona_totals[p]["scanned"],
+                "found": persona_totals[p]["found"],
+            })
+
+    pc = res.get("positive_controls", [])
+    pc_present = sum(1 for p in pc if p.get("present"))
+    pc_total = len(pc)
+
+    timestamp = datetime.now().strftime("%H:%M:%S")
+
+    _last_leak_run = {
+        "timestamp": timestamp,
+        "persona_table": persona_table,
+        "positive_controls_present": pc_present,
+        "positive_controls_total": pc_total,
+        "total_scanned": res["total_scanned"],
+        "total_found": res["total_found"],
+    }
+
+    if request.headers.get("HX-Request") == "true":
+        return templates.TemplateResponse(
+            request=request,
+            name="_leak_test_result.html",
+            context={"request": request, "last_leak_run": _last_leak_run}
+        )
+
     return RedirectResponse(url="/trust", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/trust/eval")
 def trust_eval(request: Request):
     """Run the accuracy check live and stream/redirect."""
-    global _cached_eval_results
+    global _cached_eval_results, _last_eval_run
     from . import eval as ev
-    _cached_eval_results = ev.run_eval()
+    res = ev.run_eval()
+    _cached_eval_results = res
+
+    timestamp = datetime.now().strftime("%H:%M:%S")
+
+    _last_eval_run = {
+        "timestamp": timestamp,
+        "results": res,
+    }
+
+    if request.headers.get("HX-Request") == "true":
+        return templates.TemplateResponse(
+            request=request,
+            name="_eval_result.html",
+            context={"request": request, "last_eval_run": _last_eval_run}
+        )
+
     return RedirectResponse(url="/trust", status_code=status.HTTP_303_SEE_OTHER)

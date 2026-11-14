@@ -1,0 +1,27 @@
+<div class="card" style="margin-top:var(--s4);padding:var(--s4);border:1px solid var(--border)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--s2)">
+    <h3 style="font-weight:600;font-size:15px">Leak test result</h3>
+    <span class="meta">run at {{ last_leak_run.timestamp }}</span>
+  </div>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Persona</th>
+        <th class="num">Views</th>
+        <th class="num">Strings scanned</th>
+        <th class="num">Found</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in last_leak_run.persona_table %}
+      <tr>
+        <td>{{ row.persona }}</td>
+        <td class="num">{{ row.views }}</td>
+        <td class="num">{{ row.scanned }}</td>
+        <td class="num">{{ row.found }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="meta" style="margin-top:var(--s3)">Positive controls: {{ last_leak_run.positive_controls_present }} of {{ last_leak_run.positive_controls_total }} expected canaries present</p>
+</div>
