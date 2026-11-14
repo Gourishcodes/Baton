@@ -1,7 +1,7 @@
 # Evaluation & Leak Test Results
 
 **Date**: 2026-11-14  
-**Commit**: `17c34d3b9c6d67bd9c8badf3e39d1e513ef1436c`
+**Commit**: `de43aec5523e1cb34fbcd6cc2f5bbe503533d9be`
 
 These outputs represent real test executions against the committed demo cache. These are the only place numbers may be quoted from.
 
