@@ -1,0 +1,37 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Meera's last working day is 27 Nov 2026 and the notice shortfall is waived under HR-CASE-4471.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-11-27",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:003"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Wording of the reference letter to be decided by Divya.",
+      "subject": "reference letter",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:008"
+      ]
+    }
+  ],
+  "gaps": []
+}

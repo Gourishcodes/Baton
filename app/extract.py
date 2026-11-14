@@ -20,7 +20,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DEMO_CACHE_DIR = os.path.join(ROOT, "demo_cache")
 FIXTURES_DIR = os.path.join(ROOT, "tests", "fixtures")
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 SCHEMA_VERSION = "v1"
 
 

@@ -1,0 +1,128 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Annual contract signed with Pingwire for 3,18,400 with a 12-month lock-in",
+      "subject": "Pingwire contract",
+      "attribute": "vendor",
+      "value": "Pingwire",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:001",
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Nobody has been assigned to renegotiate the Pingwire contract yet",
+      "subject": "Pingwire contract renegotiation",
+      "attribute": "owner",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:003"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Make sure the Pingwire renewal date is in the calendar",
+      "subject": "Pingwire renewal date",
+      "attribute": "due_date",
+      "value": "2027-03-31",
+      "owner": null,
+      "due": "2027-03-31",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:002",
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Runway is 7.4 months at current burn",
+      "subject": "Company runway",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Infra cap drops to 24,750 per month from 1 Dec",
+      "subject": "Infra cap",
+      "attribute": "budget_monthly",
+      "value": "24,750",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Divya will announce the infra cap change to the dev team after the board call on the 16th",
+      "subject": "Infra cap announcement",
+      "attribute": "owner",
+      "value": "Divya Menon",
+      "owner": "Divya Menon",
+      "due": "2026-11-16",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005",
+        "F1:006"
+      ]
+    },
+    {
+      "type": "Dependency",
+      "text": "Managed Postgres will cost 19,200 a month after the next upgrade",
+      "subject": "Managed Postgres cost",
+      "attribute": "budget_monthly",
+      "value": "19,200",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:007"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who will be assigned to renegotiate the Pingwire contract?",
+      "why": "The owner is currently unassigned.",
+      "cites": [
+        "F1:003"
+      ]
+    }
+  ]
+}
