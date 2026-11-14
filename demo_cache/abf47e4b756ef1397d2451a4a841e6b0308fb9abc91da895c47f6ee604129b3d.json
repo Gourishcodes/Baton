@@ -1,0 +1,560 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Stack is FastAPI plus managed Postgres 15",
+      "subject": "stack",
+      "attribute": "stack",
+      "value": "FastAPI + managed Postgres 15",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:004",
+        "N1:004"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Meera Joshi owns the notification service",
+      "subject": "notification service",
+      "attribute": "owner",
+      "value": "meera.joshi",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:004",
+        "N1:005"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Use managed Postgres 1 small instance due to concurrent writes from POS webhook and staff app",
+      "subject": "database",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:006",
+        "N1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "We use Textly for SMS",
+      "subject": "SMS vendor",
+      "attribute": "vendor",
+      "value": "Textly",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:008"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Rule for the pilot: max 3 messages per order (received, ready, delayed) and no marketing messages",
+      "subject": "pilot messaging rule",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:013"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Nightly reconcile job failed due to settlement file late landing",
+      "subject": "reconcile job",
+      "attribute": "status",
+      "value": "failed",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": true,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:017",
+        "C1:019",
+        "N1:024"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Webhook retries capped at 5 with exponential backoff",
+      "subject": "webhook retries",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:020"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Hosting and managed Postgres monthly budget is about ₹41,500",
+      "subject": "hosting budget",
+      "attribute": "budget_monthly",
+      "value": "₹41,500",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:021"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Dropping Textly and moving SMS to Pingwire",
+      "subject": "SMS vendor",
+      "attribute": "vendor",
+      "value": "Pingwire",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "SMS vendor",
+        "attribute": "vendor",
+        "old_value": "Textly"
+      },
+      "cites": [
+        "C1:026",
+        "N1:014"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Keep Textly adapter in repo for a month in case of rollback",
+      "subject": "Textly adapter",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:027",
+        "N1:015"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "All vendor invoices go through Sameer Kulkarni",
+      "subject": "vendor invoices",
+      "attribute": "approver",
+      "value": "sameer.kulkarni",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:029"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Multi-language templates cut from v1, English only for pilot",
+      "subject": "languages",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:031"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Pilot launch target is 28 Nov",
+      "subject": "pilot launch",
+      "attribute": "due_date",
+      "value": "2026-11-28",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:032"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Critical path items need to be done by 21 Nov",
+      "subject": "critical path",
+      "attribute": "due_date",
+      "value": "2026-11-21",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "C1:032"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Arjun Rao takes over the notification service and reconcile job starting 9 Nov",
+      "subject": "notification service",
+      "attribute": "owner",
+      "value": "arjun.rao",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "notification service",
+        "attribute": "owner",
+        "old_value": "meera.joshi"
+      },
+      "cites": [
+        "C1:038",
+        "N1:023"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Tanvi Shetty owns the staff app",
+      "subject": "staff app",
+      "attribute": "owner",
+      "value": "tanvi.shetty",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:006"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya Menon owns production deploys and access grants",
+      "subject": "production deploys and access grants",
+      "attribute": "owner",
+      "value": "divya.menon",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:007"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Meera to migrate notifier to Pingwire",
+      "subject": "notifier migration",
+      "attribute": "none",
+      "value": null,
+      "owner": "meera.joshi",
+      "due": "2026-10-25",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:017"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Divya to rotate Pingwire API key on Meera's last day",
+      "subject": "Pingwire API key rotation",
+      "attribute": "none",
+      "value": null,
+      "owner": "divya.menon",
+      "due": "2026-11-27",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:025"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Meera to apply migration 0007 on staging before 2026-11-18 demo",
+      "subject": "migration 0007 staging",
+      "attribute": "none",
+      "value": null,
+      "owner": "meera.joshi",
+      "due": "2026-11-18",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "N1:029"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Set up managed Postgres (prod + staging)",
+      "subject": "managed Postgres setup",
+      "attribute": "due_date",
+      "value": "2026-09-14",
+      "owner": "meera.joshi",
+      "due": "2026-09-14",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:001"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Textly SMS adapter",
+      "subject": "Textly SMS adapter",
+      "attribute": "due_date",
+      "value": "2026-10-05",
+      "owner": "meera.joshi",
+      "due": "2026-10-05",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:002"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Pingwire SMS adapter",
+      "subject": "Pingwire SMS adapter",
+      "attribute": "due_date",
+      "value": "2026-10-25",
+      "owner": "meera.joshi",
+      "due": "2026-10-25",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:003"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Enforce max 3 messages per order in notifier",
+      "subject": "max 3 messages enforcement",
+      "attribute": "due_date",
+      "value": "2026-10-03",
+      "owner": "meera.joshi",
+      "due": "2026-10-03",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:004"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Webhook retry with capped backoff",
+      "subject": "webhook retry",
+      "attribute": "due_date",
+      "value": "2026-10-07",
+      "owner": "meera.joshi",
+      "due": "2026-10-07",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:005"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Delivery report screen in staff app",
+      "subject": "delivery report screen",
+      "attribute": "due_date",
+      "value": "2026-11-20",
+      "owner": null,
+      "due": "2026-11-20",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:006"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "order_delayed template approval (Pingwire / operator)",
+      "subject": "order_delayed template approval",
+      "attribute": "due_date",
+      "value": "2026-11-14",
+      "owner": "meera.joshi",
+      "due": "2026-11-14",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:007"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Staff app: order list polish",
+      "subject": "staff app order list polish",
+      "attribute": "due_date",
+      "value": "2026-11-18",
+      "owner": "tanvi.shetty",
+      "due": "2026-11-18",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:008"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Dashboard export (CSV) on branch feat/export-v2",
+      "subject": "dashboard export CSV",
+      "attribute": "due_date",
+      "value": "2026-11-18",
+      "owner": "meera.joshi",
+      "due": "2026-11-18",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:009"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Runbook for the reconcile job",
+      "subject": "reconcile job runbook",
+      "attribute": "due_date",
+      "value": "2026-11-20",
+      "owner": null,
+      "due": "2026-11-20",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:010"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Rotate Pingwire API key on Meera's last day",
+      "subject": "Rotate Pingwire API key",
+      "attribute": "due_date",
+      "value": "2026-11-27",
+      "owner": "divya.menon",
+      "due": "2026-11-27",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:011"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Onboarding doc for Arjun",
+      "subject": "onboarding doc for Arjun",
+      "attribute": "due_date",
+      "value": "2026-11-08",
+      "owner": "tanvi.shetty",
+      "due": "2026-11-08",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:012"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Pilot launch (Saffron Lane Kitchen)",
+      "subject": "pilot launch Saffron Lane Kitchen",
+      "attribute": "due_date",
+      "value": "2026-12-05",
+      "owner": "divya.menon",
+      "due": "2026-12-05",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "T1:013"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who will cover on-call during the pilot and after 2026-11-27?",
+      "why": "On-call coverage is TBD and Tanvi is in exams during the first two weeks of December.",
+      "cites": [
+        "N1:010",
+        "N1:028",
+        "C1:048",
+        "C1:049"
+      ]
+    }
+  ]
+}

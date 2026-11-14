@@ -1,0 +1,94 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Annual contract for Pingwire is signed with a 12-month lock-in.",
+      "subject": "Pingwire contract",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:001",
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Nobody has been assigned to renegotiate the Pingwire contract yet.",
+      "subject": "Pingwire contract renegotiation",
+      "attribute": "owner",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Infra cap drops to †24,750 per month from 1 Dec.",
+      "subject": "Infra cap",
+      "attribute": "budget_monthly",
+      "value": "24750",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya will announce the infra cap change to the dev team after the board call.",
+      "subject": "Infra cap announcement",
+      "attribute": "owner",
+      "value": "Divya",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Divya will tell the team about the infra cap on the 16th.",
+      "subject": "Infra cap team announcement",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:006"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who will be assigned to renegotiate the Pingwire contract?",
+      "why": "Nobody has been assigned yet, creating a missing owner.",
+      "cites": [
+        "F1:003"
+      ]
+    }
+  ]
+}

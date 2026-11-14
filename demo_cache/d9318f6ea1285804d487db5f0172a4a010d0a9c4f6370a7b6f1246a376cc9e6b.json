@@ -1,0 +1,77 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Meera's last working day is 27 Nov 2026 and notice shortfall waived under case reference HR-CASE-4471",
+      "subject": "Meera's last working day",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-11-27",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "A retention counter-offer of ₹11,40,000 CTC was declined",
+      "subject": "Retention counter-offer",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Do not share the reason for leaving or the counter-offer with the successor or the wider team",
+      "subject": "Reason for leaving and counter-offer communication",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:007"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Wording of the reference letter to be decided by Divya",
+      "subject": "Reference letter wording",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya",
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:008"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "What will be the exact wording of the reference letter?",
+      "why": "The wording is open and to be decided by Divya.",
+      "cites": [
+        "H1:008"
+      ]
+    }
+  ]
+}

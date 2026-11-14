@@ -1,0 +1,143 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Annual contract for Pingwire is ₹3,18,400 with a 12-month lock-in",
+      "subject": "Pingwire",
+      "attribute": "budget_monthly",
+      "value": "₹3,18,400",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Divya approved signing the Pingwire contract",
+      "subject": "Pingwire",
+      "attribute": "approver",
+      "value": "Divya",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:002"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Make sure the renewal date is in the calendar",
+      "subject": "Pingwire renewal date",
+      "attribute": "due_date",
+      "value": "2027-03-31",
+      "owner": null,
+      "due": "2027-03-31",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:002",
+        "F1:003"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Nobody has been assigned to renegotiate the Pingwire contract yet",
+      "subject": "Pingwire renegotiation",
+      "attribute": "owner",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:003"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "Runway is 7.4 months at current burn",
+      "subject": "Runway",
+      "attribute": "none",
+      "value": "7.4 months",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Infra cap drops to ₹24,750 per month from 1 Dec",
+      "subject": "Infra cap",
+      "attribute": "budget_monthly",
+      "value": "₹24,750",
+      "owner": null,
+      "due": null,
+      "event_date": "2026-12-01",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Divya will announce the infra cap change after the board call",
+      "subject": "Infra cap announcement",
+      "attribute": "owner",
+      "value": null,
+      "owner": "Divya",
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:005",
+        "F1:006"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Managed Postgres will cost ₹19,200 a month after the next upgrade",
+      "subject": "Managed Postgres",
+      "attribute": "budget_monthly",
+      "value": "₹19,200",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "F1:007"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who will be assigned to renegotiate the Pingwire contract?",
+      "why": "Nobody has been assigned yet as stated in F1:003.",
+      "cites": [
+        "F1:003"
+      ]
+    }
+  ]
+}

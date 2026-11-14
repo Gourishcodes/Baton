@@ -1,0 +1,73 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Last working day is 27 Nov 2026, notice shortfall waived, case reference HR-CASE-4471.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-10-29",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Retention counter-offer of †11,40,000 CTC was declined.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-10-29",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "A formal warning (ref HR-W2-9185) was considered but not issued.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": "2026-10-29",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:005"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Wording of the reference letter, to be decided by Divya.",
+      "subject": "Reference letter",
+      "attribute": "none",
+      "value": null,
+      "owner": "Divya Menon",
+      "due": null,
+      "event_date": "2026-10-29",
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:008"
+      ]
+    }
+  ],
+  "gaps": []
+}

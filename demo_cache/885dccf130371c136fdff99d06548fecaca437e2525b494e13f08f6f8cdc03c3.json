@@ -1,0 +1,98 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Last working day agreed as 27 Nov 2026 and notice shortfall waived for Meera Joshi.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:003"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Retention counter-offer of ₹11,40,000 CTC was declined by Meera Joshi.",
+      "subject": "Meera Joshi",
+      "attribute": "budget_monthly",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Formal warning ref HR-W2-9185 considered for missed October sprint commitments was not issued.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:005"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Do not share the reason for leaving or the counter-offer with the successor or the wider team.",
+      "subject": "Meera Joshi",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:007"
+      ]
+    },
+    {
+      "type": "OpenQuestion",
+      "text": "Wording of the reference letter to be decided by Divya.",
+      "subject": "Reference letter",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "H1:001",
+        "H1:008"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "What is the exact wording for Meera Joshi's reference letter?",
+      "why": "The wording is open and needs to be decided by Divya Menon.",
+      "cites": [
+        "H1:008"
+      ]
+    }
+  ]
+}

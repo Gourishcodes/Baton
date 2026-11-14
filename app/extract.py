@@ -20,7 +20,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DEMO_CACHE_DIR = os.path.join(ROOT, "demo_cache")
 FIXTURES_DIR = os.path.join(ROOT, "tests", "fixtures")
 
-PROMPT_VERSION = "v3"
+PROMPT_VERSION = "v6"
 SCHEMA_VERSION = "v1"
 
 
@@ -92,6 +92,11 @@ Rules:
    would need, or an open question marked TBD. At most 8 gaps. Each gap cites the lines that show it.
 10. Be thorough. Emit one claim for every distinct decision, owner, risk, dependency,
     open question and next action. Do not merge or summarise. At most 40 claims.
+11. Only when a task-board row (CSV) and another line both give a date for the same item,
+    emit a claim for each date, with the same subject wording and attribute "due_date".
+    Do not reconcile them. Never emit a claim for a task-board row just because it is on
+    the board. A NextAction must be an open task: never emit one for a row whose status
+    is Done or Cancelled.
 Label set for this call: {label_set}."""
 
 
