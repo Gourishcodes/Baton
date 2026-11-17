@@ -11,7 +11,7 @@
       <p class="meta" style="margin:var(--s1) 0 0">
         {% if role == 'successor' %}
         The server drew these bars. The text behind them was never sent.
-        {% elif role == 'lead' %}
+        {% elif role in ['lead', 'approver'] %}
         Switch to Successor to see what they see.
         {% else %}
         Every claim shows how we know it. Nothing here is shared until the approver approves it.
@@ -29,7 +29,7 @@
 
   {% if is_seeded_demo %}
   <div class="banner" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s4);gap:var(--s3)">
-    <span>Demo case seeded: 28 sourced claims approved by Divya Menon (seeded). Inferred claims, conflicts, and gaps remain pending for review.</span>
+    <span>Demo case seeded: 28 sourced claims approved by {{ case.approver or 'Divya Menon' }} (seeded). Inferred claims, conflicts, and gaps remain pending for review.</span>
     <form method="post" action="/demo/reset">
       <button type="submit" class="btn btn--quiet" style="font-size:12px;padding:2px 8px;height:24px">Reset demo</button>
     </form>
@@ -37,21 +37,21 @@
   {% endif %}
 
   <div class="filters" role="group" aria-label="Filter claims" style="margin-bottom:var(--s4)">
-    <button class="filter" aria-pressed="{{ 'true' if (not current_filter and not needs_review) else 'false' }}" hx-get="/case/1/claims" hx-target="#ledger-content" hx-push-url="true">All <span class="num">{{ filter_counts.all }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if needs_review else 'false' }}" hx-get="/case/1/claims?needs_review=1" hx-target="#ledger-content" hx-push-url="true">Needs review <span class="num">{{ filter_counts.needs_review }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Decision' else 'false' }}" hx-get="/case/1/claims?type=Decision" hx-target="#ledger-content" hx-push-url="true">Decision <span class="num">{{ filter_counts.Decision }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Owner' else 'false' }}" hx-get="/case/1/claims?type=Owner" hx-target="#ledger-content" hx-push-url="true">Owner <span class="num">{{ filter_counts.Owner }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Risk' else 'false' }}" hx-get="/case/1/claims?type=Risk" hx-target="#ledger-content" hx-push-url="true">Risk <span class="num">{{ filter_counts.Risk }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Dependency' else 'false' }}" hx-get="/case/1/claims?type=Dependency" hx-target="#ledger-content" hx-push-url="true">Dependency <span class="num">{{ filter_counts.Dependency }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'OpenQuestion' else 'false' }}" hx-get="/case/1/claims?type=OpenQuestion" hx-target="#ledger-content" hx-push-url="true">Open question <span class="num">{{ filter_counts.OpenQuestion }}</span></button>
-    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'NextAction' else 'false' }}" hx-get="/case/1/claims?type=NextAction" hx-target="#ledger-content" hx-push-url="true">Next action <span class="num">{{ filter_counts.NextAction }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if (not current_filter and not needs_review) else 'false' }}" hx-get="/case/{{ case.id }}/claims" hx-target="#ledger-content" hx-push-url="true">All <span class="num">{{ filter_counts.all }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if needs_review else 'false' }}" hx-get="/case/{{ case.id }}/claims?needs_review=1" hx-target="#ledger-content" hx-push-url="true">Needs review <span class="num">{{ filter_counts.needs_review }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Decision' else 'false' }}" hx-get="/case/{{ case.id }}/claims?type=Decision" hx-target="#ledger-content" hx-push-url="true">Decision <span class="num">{{ filter_counts.Decision }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Owner' else 'false' }}" hx-get="/case/{{ case.id }}/claims?type=Owner" hx-target="#ledger-content" hx-push-url="true">Owner <span class="num">{{ filter_counts.Owner }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Risk' else 'false' }}" hx-get="/case/{{ case.id }}/claims?type=Risk" hx-target="#ledger-content" hx-push-url="true">Risk <span class="num">{{ filter_counts.Risk }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'Dependency' else 'false' }}" hx-get="/case/{{ case.id }}/claims?type=Dependency" hx-target="#ledger-content" hx-push-url="true">Dependency <span class="num">{{ filter_counts.Dependency }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'OpenQuestion' else 'false' }}" hx-get="/case/{{ case.id }}/claims?type=OpenQuestion" hx-target="#ledger-content" hx-push-url="true">Open question <span class="num">{{ filter_counts.OpenQuestion }}</span></button>
+    <button class="filter" aria-pressed="{{ 'true' if current_filter == 'NextAction' else 'false' }}" hx-get="/case/{{ case.id }}/claims?type=NextAction" hx-target="#ledger-content" hx-push-url="true">Next action <span class="num">{{ filter_counts.NextAction }}</span></button>
   </div>
 
   <div id="ledger-content">
     <div class="ledger" role="list">
       {% for item in claims %}
         {% if item.visible %}
-          {{ m.claim_card(item, persona=role, is_selected=(open_line and open_line in item.cites|map(attribute='line_id')|list), index=loop.index0, open_line=open_line) }}
+          {{ m.claim_card(item, persona=role, is_selected=(open_line and open_line in item.cites|map(attribute='line_id')|list), index=loop.index0, open_line=open_line, case_id=case.id) }}
         {% else %}
           {{ m.redacted_claim(index=loop.index0) }}
         {% endif %}
@@ -63,7 +63,7 @@
     {% endif %}
   </div>
 
-  {% if role == 'lead' %}
+  {% if role in ['lead', 'approver'] %}
   <p class="kbdhint"><kbd>J</kbd> <kbd>K</kbd> move &nbsp; <kbd>A</kbd> approve &nbsp; <kbd>E</kbd> edit &nbsp; <kbd>R</kbd> reject &nbsp; <kbd>Enter</kbd> open source</p>
   {% endif %}
 </div>

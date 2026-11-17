@@ -4,8 +4,9 @@
 <span class="tag{% if is_restricted %} tag--restricted{% endif %}">{{ name|capitalize }}</span>
 {%- endmacro %}
 
-{% macro cite(cid, claim_id=1, is_expanded=false) -%}
-<a class="cite" href="/case/1/claims/{{ claim_id }}/source?line={{ cid }}" hx-get="/case/1/claims/{{ claim_id }}/source?line={{ cid }}" hx-target="#drawer" {% if is_expanded %}aria-expanded="true"{% endif %}>{{ cid.replace(':', '·') }}</a>
+{% macro cite(cid, claim_id=1, is_expanded=false, case_id=None) -%}
+{% set c_id = case_id or (case.id if case is defined and case else 1) %}
+<a class="cite" href="/case/{{ c_id }}/claims/{{ claim_id }}/source?line={{ cid }}" hx-get="/case/{{ c_id }}/claims/{{ claim_id }}/source?line={{ cid }}" hx-target="#drawer" {% if is_expanded %}aria-expanded="true"{% endif %}>{{ cid.replace(':', '·') }}</a>
 {%- endmacro %}
 
 {% macro status(st) -%}
@@ -40,12 +41,13 @@
 </div>
 {%- endmacro %}
 
-{% macro claim_card(claim, persona='lead', is_selected=false, index=0, open_line=None) -%}
+{% macro claim_card(claim, persona='lead', is_selected=false, index=0, open_line=None, case_id=None) -%}
 {% set basis_class = 'claim--' ~ claim.basis %}
 {% set is_conflict = claim.flags.get('conflict_with') %}
 {% set is_superseded = claim.flags.get('superseded_by') %}
 {% set dec = claim.decision.decision if claim.decision else 'pending' %}
 {% set is_rejected = (dec == 'rejected') %}
+{% set c_id = case_id or (case.id if case is defined and case else (claim.case_id if claim and claim.case_id is defined and claim.case_id else 1)) %}
 
 <article class="claim {{ 'claim--conflict' if is_conflict else basis_class }} {% if is_superseded %}claim--superseded{% endif %} {% if is_rejected %}claim--rejected{% endif %}" role="listitem" id="claim-{{ claim.id }}" {% if is_selected %}aria-selected="true"{% endif %}>
   <span class="type">{{ claim.type }}</span>
@@ -66,7 +68,7 @@
     {% elif claim.basis == 'inferred' %}
     <p class="note">A guess. No source line says this.</p>
     {% elif claim.basis == 'attested' %}
-    <p class="note">Attested by {{ claim.attested_by or 'Leaver' }}. No source line exists.</p>
+    <p class="note">Attested by {{ claim.attested_by or (case.leaver if case is defined and case else 'Leaver') }}. No source line exists.</p>
     {% endif %}
 
     <div class="rowfoot">
@@ -84,22 +86,22 @@
 
       <span class="cites">
         {% for c in claim.cites %}
-        <a class="cite" href="/case/1/claims/{{ claim.id }}/source?line={{ c.line_id }}" hx-get="/case/1/claims/{{ claim.id }}/source?line={{ c.line_id }}" hx-target="#drawer-slot" {% if open_line == c.line_id %}aria-expanded="true"{% endif %}>{{ c.line_id.replace(':', '·') }}</a>
+        <a class="cite" href="/case/{{ c_id }}/claims/{{ claim.id }}/source?line={{ c.line_id }}" hx-get="/case/{{ c_id }}/claims/{{ claim.id }}/source?line={{ c.line_id }}" hx-target="#drawer-slot" {% if open_line == c.line_id %}aria-expanded="true"{% endif %}>{{ c.line_id.replace(':', '·') }}</a>
         {% endfor %}
       </span>
 
-      {% if persona == 'lead' %}
+      {% if persona in ['lead', 'approver'] %}
       <span class="acts">
         {% if dec == 'pending' %}
-        <button class="btn btn--primary" hx-post="/case/1/claims/{{ claim.id }}/decision?action=approve" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Approve</button>
-        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=edit" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Edit</button>
-        <button class="btn btn--danger" hx-post="/case/1/claims/{{ claim.id }}/decision?action=reject" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Reject</button>
+        <button class="btn btn--primary" hx-post="/case/{{ c_id }}/claims/{{ claim.id }}/decision?action=approve" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Approve</button>
+        <button class="btn btn--quiet" hx-post="/case/{{ c_id }}/claims/{{ claim.id }}/decision?action=edit" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Edit</button>
+        <button class="btn btn--danger" hx-post="/case/{{ c_id }}/claims/{{ claim.id }}/decision?action=reject" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Reject</button>
         {% elif dec == 'rejected' %}
-        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=restore" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Restore</button>
+        <button class="btn btn--quiet" hx-post="/case/{{ c_id }}/claims/{{ claim.id }}/decision?action=restore" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Restore</button>
         {% else %}
         {# approved or edited #}
-        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=edit" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Edit</button>
-        <button class="btn btn--quiet" hx-post="/case/1/claims/{{ claim.id }}/decision?action=reject" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Reject</button>
+        <button class="btn btn--quiet" hx-post="/case/{{ c_id }}/claims/{{ claim.id }}/decision?action=edit" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Edit</button>
+        <button class="btn btn--quiet" hx-post="/case/{{ c_id }}/claims/{{ claim.id }}/decision?action=reject" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML">Reject</button>
         {% endif %}
       </span>
       {% endif %}
@@ -108,6 +110,6 @@
 </article>
 {%- endmacro %}
 
-{% macro claim(claim_data, persona='lead', is_selected=false, index=0, open_line=None) -%}
-{{ claim_card(claim_data, persona=persona, is_selected=is_selected, index=index, open_line=open_line) }}
+{% macro claim(claim_data, persona='lead', is_selected=false, index=0, open_line=None, case_id=None) -%}
+{{ claim_card(claim_data, persona=persona, is_selected=is_selected, index=index, open_line=open_line, case_id=case_id) }}
 {%- endmacro %}

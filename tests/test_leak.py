@@ -13,6 +13,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from app import db, extract, review, repo
+from app.auth import demo_principal
 from app.leaktest import run_leak_test
 
 
@@ -173,9 +174,10 @@ class TestLeakTest:
         review.seed_demo_decisions(1)
         review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
 
-        lead_claims_before = len(repo.get_claims(1, "lead"))
-        lead_gaps_before = len(repo.get_gaps(1, "lead"))
-        case_status_before = repo.get_case(1, "lead")["status"]
+        p_lead = demo_principal("lead", case_id=1)
+        lead_claims_before = len(repo.get_claims(1, p_lead))
+        lead_gaps_before = len(repo.get_gaps(1, p_lead))
+        case_status_before = repo.get_case(1, p_lead)["status"]
         assert lead_claims_before > 0
 
         client = TestClient(app)
@@ -211,9 +213,9 @@ class TestLeakTest:
         assert "safe" not in hx_resp.text.lower()
 
         # Assert claim counts and state for lead are unchanged
-        lead_claims_after = len(repo.get_claims(1, "lead"))
-        lead_gaps_after = len(repo.get_gaps(1, "lead"))
-        case_status_after = repo.get_case(1, "lead")["status"]
+        lead_claims_after = len(repo.get_claims(1, p_lead))
+        lead_gaps_after = len(repo.get_gaps(1, p_lead))
+        case_status_after = repo.get_case(1, p_lead)["status"]
 
         assert lead_claims_after == lead_claims_before
         assert lead_gaps_after == lead_gaps_before
@@ -231,9 +233,10 @@ class TestLeakTest:
         review.seed_demo_decisions(1)
         review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
 
-        lead_claims_before = len(repo.get_claims(1, "lead"))
-        lead_gaps_before = len(repo.get_gaps(1, "lead"))
-        case_status_before = repo.get_case(1, "lead")["status"]
+        p_lead = demo_principal("lead", case_id=1)
+        lead_claims_before = len(repo.get_claims(1, p_lead))
+        lead_gaps_before = len(repo.get_gaps(1, p_lead))
+        case_status_before = repo.get_case(1, p_lead)["status"]
         assert lead_claims_before > 0
 
         client = TestClient(app)
@@ -263,9 +266,9 @@ class TestLeakTest:
         assert "safe" not in hx_resp.text.lower()
 
         # Assert claim counts and state for lead are unchanged
-        lead_claims_after = len(repo.get_claims(1, "lead"))
-        lead_gaps_after = len(repo.get_gaps(1, "lead"))
-        case_status_after = repo.get_case(1, "lead")["status"]
+        lead_claims_after = len(repo.get_claims(1, p_lead))
+        lead_gaps_after = len(repo.get_gaps(1, p_lead))
+        case_status_after = repo.get_case(1, p_lead)["status"]
 
         assert lead_claims_after == lead_claims_before
         assert lead_gaps_after == lead_gaps_before

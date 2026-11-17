@@ -15,7 +15,8 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import Signer
 
 from . import db, access, repo, review, extract
-from .middleware import WireCheckMiddleware, get_persona_from_request, SECRET_KEY
+from .auth import Principal, demo_principal
+from .middleware import WireCheckMiddleware, get_persona_from_request, get_principal_from_request, SECRET_KEY
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 signer = Signer(SECRET_KEY)
@@ -47,13 +48,13 @@ app.add_middleware(WireCheckMiddleware)
 app.mount("/static", StaticFiles(directory=os.path.join(ROOT, "static")), name="static")
 
 
-def get_nav_counts(case_id: int, persona: str) -> dict:
+def get_nav_counts(case_id: int, principal: Principal) -> dict:
     """Compute count badges for the nav tabs."""
-    sources = repo.get_sources(case_id, persona)
-    claims = repo.get_claims(case_id, persona)
-    gaps = repo.get_gaps(case_id, persona)
-    conflicts = repo.get_conflicts(case_id, persona)
-    versions = repo.get_versions(case_id, persona)
+    sources = repo.get_sources(case_id, principal)
+    claims = repo.get_claims(case_id, principal)
+    gaps = repo.get_gaps(case_id, principal)
+    conflicts = repo.get_conflicts(case_id, principal)
+    versions = repo.get_versions(case_id, principal)
     latest_v = repo.get_latest_version(case_id)
 
     return {
@@ -71,7 +72,7 @@ def not_found_response():
     html = (
         "<!doctype html><html lang=\"en\"><head><title>Not found</title>"
         "<link rel=\"stylesheet\" href=\"/static/baton.css\"></head><body>"
-        "<div class=\"wrap\" style=\"padding-top:var=\"--s8\">"
+        "<div class=\"wrap\" style=\"padding-top:var(--s8)\">"
         "<h1 class=\"h1\">Not found</h1>"
         "<p class=\"meta\" style=\"margin-top:var(--s2)\">The requested item does not exist or is outside your clearance.</p>"
         "</div></body></html>"
@@ -87,12 +88,13 @@ def healthz():
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     persona = get_persona_from_request(request)
-    case = repo.get_case(1, persona)
-    counts = get_nav_counts(1, persona) if case else {}
+    principal = get_principal_from_request(request, 1)
+    case = repo.get_case(1, principal)
+    counts = get_nav_counts(1, principal) if case else {}
     return templates.TemplateResponse(
         request=request,
         name="home.html",
-        context={"request": request, "role": persona, "case": case, "counts": counts, "active_tab": ""}
+        context={"request": request, "role": persona, "principal": principal, "case": case, "counts": counts, "active_tab": ""}
     )
 
 
@@ -136,18 +138,8 @@ def demo_open():
 
 @app.post("/demo/reset")
 def demo_reset():
-    """Reset the demo case back to initial seeded state."""
-    conn = db.get_conn()
-    conn.execute("DELETE FROM decisions")
-    conn.execute("DELETE FROM versions")
-    conn.execute("DELETE FROM acknowledgements")
-    conn.execute("DELETE FROM dropped_claims")
-    conn.execute("UPDATE gaps SET status = 'open', answer_claim_id = NULL")
-    conn.execute("DELETE FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE basis = 'attested')")
-    conn.execute("DELETE FROM claims WHERE basis = 'attested'")
-    conn.execute("UPDATE cases SET status = 'open' WHERE id = 1")
-    conn.commit()
-
+    """Reset the demo case (case 1 only) back to initial seeded state."""
+    repo.reset_demo_case(1)
     review.seed_demo_decisions(1)
     review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
 
@@ -160,12 +152,13 @@ def demo_reset():
 @app.get("/case/{case_id}/sources", response_class=HTMLResponse)
 def sources_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
 
-    sources = repo.get_sources(case_id, persona)
-    counts = get_nav_counts(case_id, persona)
+    sources = repo.get_sources(case_id, principal)
+    counts = get_nav_counts(case_id, principal)
 
     return templates.TemplateResponse(
         request=request,
@@ -173,6 +166,7 @@ def sources_view(request: Request, case_id: int):
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "sources": sources,
@@ -197,12 +191,13 @@ def claims_view(
     open_cite: str | None = None,
 ):
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
 
-    all_claims = repo.get_claims(case_id, persona)
-    counts = get_nav_counts(case_id, persona)
+    all_claims = repo.get_claims(case_id, principal)
+    counts = get_nav_counts(case_id, principal)
 
     # Filter counts
     filter_counts = {
@@ -230,14 +225,15 @@ def claims_view(
     drawer_open = False
     if open_cite:
         source_id = open_cite.split(":")[0]
-        src, lines = repo.get_lines_for_source(source_id, persona)
-        if src and lines:
+        src, lines = repo.get_lines_for_source(case_id, source_id, principal)
+        if src and lines and any(l["line_id"] == open_cite for l in lines):
             drawer_open = True
             drawer_html = templates.get_template("drawer.html").render({
                 "source": src,
                 "lines": lines,
                 "target_line_id": open_cite,
                 "cite_count": 1,
+                "case": case,
             })
 
     # If this is an HTMX request for ledger only:
@@ -248,19 +244,20 @@ def claims_view(
 <div class="ledger" role="list">
   {% for item in claims %}
     {% if item.visible %}
-      {{ m.claim_card(item, persona=role, is_selected=(open_line and open_line in item.cites|map(attribute='line_id')|list), index=loop.index0, open_line=open_line) }}
+      {{ m.claim_card(item, persona=role, is_selected=(open_line and open_line in item.cites|map(attribute='line_id')|list), index=loop.index0, open_line=open_line, case_id=case.id) }}
     {% else %}
       {{ m.redacted_claim(index=loop.index0) }}
     {% endif %}
   {% endfor %}
 </div>
 {% if restricted_count > 0 %}
-<p class="meta" style="margin-top:var(--s3)">{{ restricted_count }} items are outside your clearance. Ask the approver, {{ case.approver or 'Divya Menon' }}.</p>
+<p class="meta" style="margin-top:var(--s3)">{{ restricted_count }} items are outside your clearance. Ask the approver, {{ case.approver or principal.name }}.</p>
 {% endif %}
 """)
         return HTMLResponse(ledger_template.render({
             "claims": displayed_claims,
             "role": persona,
+            "principal": principal,
             "case": case,
             "restricted_count": restricted_count,
             "open_line": open_cite,
@@ -272,6 +269,7 @@ def claims_view(
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "filter_counts": filter_counts,
@@ -282,7 +280,7 @@ def claims_view(
             "drawer_open": drawer_open,
             "drawer_html": drawer_html,
             "open_line": open_cite,
-            "is_seeded_demo": True,
+            "is_seeded_demo": (case_id == 1),
             "active_tab": "claims",
         }
     )
@@ -290,9 +288,14 @@ def claims_view(
 
 @app.get("/case/{case_id}/claims/{cid}/source", response_class=HTMLResponse)
 def claim_source_drawer(request: Request, case_id: int, cid: int, line: str | None = None):
-    """Drawer partial for a claim cite. Returns 404 for hidden or invalid claim."""
+    """Drawer partial for a claim cite. Returns 404 for hidden or invalid claim or line from another case."""
     persona = get_persona_from_request(request)
-    claim = repo.get_claim(case_id, cid, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    claim = repo.get_claim(case_id, cid, principal)
     if not claim:
         return not_found_response()
 
@@ -304,11 +307,13 @@ def claim_source_drawer(request: Request, case_id: int, cid: int, line: str | No
         return not_found_response()
 
     source_id = target_line.split(":")[0]
-    src, lines = repo.get_lines_for_source(source_id, persona)
+    src, lines = repo.get_lines_for_source(case_id, source_id, principal)
     if not src or not lines:
         return not_found_response()
 
-    # Count how many claims cite this source
+    if not any(l["line_id"] == target_line for l in lines):
+        return not_found_response()
+
     cite_count = len(claim.get("cites", []))
 
     return templates.TemplateResponse(
@@ -320,6 +325,7 @@ def claim_source_drawer(request: Request, case_id: int, cid: int, line: str | No
             "lines": lines,
             "target_line_id": target_line,
             "cite_count": cite_count,
+            "case": case,
         }
     )
 
@@ -334,7 +340,8 @@ async def claim_decision(
 ):
     """Approve, edit, reject, or restore a claim (Approver only)."""
     persona = get_persona_from_request(request)
-    if persona != "lead":
+    principal = get_principal_from_request(request, case_id)
+    if persona not in ("lead", "approver") and principal.role != "approver":
         raise HTTPException(status_code=403, detail="Only approver may record decisions")
 
     form = {}
@@ -346,7 +353,7 @@ async def claim_decision(
     action = action or form.get("action")
     edited_text = text or form.get("text")
 
-    claim = repo.get_claim(case_id, cid, persona)
+    claim = repo.get_claim(case_id, cid, principal)
     if not claim or not claim.get("identity"):
         return not_found_response()
 
@@ -370,15 +377,15 @@ async def claim_decision(
     identity = claim["identity"]
     if action in ("approve", "edit", "reject", "restore"):
         decision_val = "approved" if action == "approve" else ("rejected" if action == "reject" else ("edited" if action == "edit" else "restore"))
-        review.record_decision(case_id, identity, decision_val, edited_text=edited_text, by="Divya Menon")
+        review.record_decision(case_id, identity, decision_val, edited_text=edited_text, by=principal.name)
 
     if request.headers.get("HX-Request") == "true":
-        updated_claim = repo.get_claim(case_id, cid, persona)
+        updated_claim = repo.get_claim(case_id, cid, principal)
         claim_macro_template = templates.env.from_string("""
 {% import "_macros.html" as m %}
-{{ m.claim_card(claim, persona='lead') }}
+{{ m.claim_card(claim, persona=role, case_id=case_id) }}
 """)
-        return HTMLResponse(claim_macro_template.render({"claim": updated_claim}))
+        return HTMLResponse(claim_macro_template.render({"claim": updated_claim, "role": persona, "case_id": case_id}))
 
     return RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -386,18 +393,20 @@ async def claim_decision(
 @app.get("/case/{case_id}/gaps", response_class=HTMLResponse)
 def gaps_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
-    gaps = repo.get_gaps(case_id, persona)
-    counts = get_nav_counts(case_id, persona)
-    allowed_labels = sorted(access.persona_holds(persona))
+    gaps = repo.get_gaps(case_id, principal)
+    counts = get_nav_counts(case_id, principal)
+    allowed_labels = sorted(principal.holds)
     return templates.TemplateResponse(
         request=request,
         name="gaps.html",
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "gaps": gaps,
@@ -411,10 +420,11 @@ def gaps_view(request: Request, case_id: int):
 async def answer_gap(request: Request, case_id: int, gid: int):
     """Answer a gap (Leaver or Lead). Hidden gap returns identical 404."""
     persona = get_persona_from_request(request)
-    if persona not in ("leaver", "lead"):
+    principal = get_principal_from_request(request, case_id)
+    if persona not in ("leaver", "lead") and principal.role not in ("leaver", "approver"):
         raise HTTPException(status_code=403, detail="Only leaver or approver may answer gaps")
 
-    gap = repo.get_gap(case_id, gid, persona)
+    gap = repo.get_gap(case_id, gid, principal)
     if not gap:
         return not_found_response()
 
@@ -426,26 +436,11 @@ async def answer_gap(request: Request, case_id: int, gid: int):
     if not ans_text:
         return RedirectResponse(url=f"/case/{case_id}/gaps", status_code=status.HTTP_303_SEE_OTHER)
 
-    holds = access.persona_holds(persona)
+    holds = principal.holds
     if ans_label not in holds:
         ans_label = sorted(holds)[0] if holds else "team"
 
-    answerer = "Meera Joshi" if persona == "leaver" else ("Divya Menon" if persona == "lead" else persona)
-    run = repo.get_latest_run(case_id)
-    run_id = run["id"] if run else 1
-
-    conn = db.get_conn()
-    cur = conn.execute(
-        """INSERT INTO claims (case_id, run_id, type, text, basis, labels, flags, identity, attested_by, attested_at, source_gap_id)
-           VALUES (?, ?, ?, ?, 'attested', ?, '{}', ?, ?, ?, ?)""",
-        (case_id, run_id, ans_type, ans_text, json.dumps([ans_label]), f"attested:{gid}", answerer, db.now_iso(), gid)
-    )
-    claim_id = cur.lastrowid
-    conn.execute(
-        "UPDATE gaps SET status = 'answered', answer_claim_id = ? WHERE id = ?",
-        (claim_id, gid)
-    )
-    conn.commit()
+    repo.answer_gap(case_id, gid, ans_text, ans_type, ans_label, principal)
 
     return RedirectResponse(url=f"/case/{case_id}/gaps", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -453,14 +448,13 @@ async def answer_gap(request: Request, case_id: int, gid: int):
 @app.get("/case/{case_id}/conflicts", response_class=HTMLResponse)
 def conflicts_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
-    conflicts = repo.get_conflicts(case_id, persona)
-    counts = get_nav_counts(case_id, persona)
-    total_conflicts = db.get_conn().execute(
-        "SELECT COUNT(*) as cnt FROM conflicts WHERE case_id = ?", (case_id,)
-    ).fetchone()["cnt"]
+    conflicts = repo.get_conflicts(case_id, principal)
+    counts = get_nav_counts(case_id, principal)
+    total_conflicts = repo.get_conflicts_count(case_id, principal)
     restricted_count = max(0, total_conflicts - len(conflicts))
     return templates.TemplateResponse(
         request=request,
@@ -468,6 +462,7 @@ def conflicts_view(request: Request, case_id: int):
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "conflicts": conflicts,
@@ -481,11 +476,12 @@ def conflicts_view(request: Request, case_id: int):
 def timeline_view(request: Request, case_id: int):
     import re
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
-    counts = get_nav_counts(case_id, persona)
-    claims = repo.get_claims(case_id, persona)
+    counts = get_nav_counts(case_id, principal)
+    claims = repo.get_claims(case_id, principal)
 
     date_pattern = re.compile(r'\b(20\d{2}-\d{2}-\d{2})\b')
     timeline_items = []
@@ -514,6 +510,7 @@ def timeline_view(request: Request, case_id: int):
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "timeline_items": timeline_items,
@@ -525,25 +522,20 @@ def timeline_view(request: Request, case_id: int):
 @app.get("/case/{case_id}/handover", response_class=HTMLResponse)
 def handover_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
-    counts = get_nav_counts(case_id, persona)
+    counts = get_nav_counts(case_id, principal)
 
     latest_v = repo.get_latest_version(case_id)
-    latest_version_obj = None
-    if latest_v > 0:
-        row = db.get_conn().execute(
-            "SELECT * FROM versions WHERE case_id = ? AND n = ?", (case_id, latest_v)
-        ).fetchone()
-        latest_version_obj = dict(row) if row else None
-
+    latest_version_obj = repo.get_version(case_id, latest_v, principal) if latest_v > 0 else None
     ack = repo.get_acknowledgement(case_id, latest_v) if latest_v > 0 else None
 
-    # Handover content = claims whose decision is approved or edited, filtered by persona
-    claims = repo.get_claims(case_id, persona)
+    # Handover content = claims whose decision is approved or edited, filtered by principal
+    claims = repo.get_claims(case_id, principal)
     approved_claims = [c for c in claims if c.get("decision") and c["decision"].get("decision") in ("approved", "edited")]
-    unanswered_gaps = [g for g in repo.get_gaps(case_id, persona) if g.get("status") == "open"]
+    unanswered_gaps = [g for g in repo.get_gaps(case_id, principal) if g.get("status") == "open"]
 
     sections = {
         "owners": [c for c in approved_claims if c.get("type") == "Owner"],
@@ -562,6 +554,7 @@ def handover_view(request: Request, case_id: int):
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "latest_version": latest_version_obj,
@@ -576,9 +569,10 @@ def handover_view(request: Request, case_id: int):
 def approve_handover(request: Request, case_id: int):
     """Approve handover (Lead only). Creates version n+1."""
     persona = get_persona_from_request(request)
-    if persona != "lead":
+    principal = get_principal_from_request(request, case_id)
+    if persona not in ("lead", "approver") and principal.role != "approver":
         raise HTTPException(status_code=403, detail="Only approver may approve handover")
-    review.create_version(case_id, approved_by="Divya Menon")
+    review.create_version(case_id, approved_by=principal.name)
     return RedirectResponse(url=f"/case/{case_id}/handover", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -586,24 +580,24 @@ def approve_handover(request: Request, case_id: int):
 def acknowledge_handover(request: Request, case_id: int):
     """Acknowledge receipt (Successor only). Closes the case."""
     persona = get_persona_from_request(request)
-    if persona != "successor":
+    principal = get_principal_from_request(request, case_id)
+    if persona != "successor" and principal.role != "successor":
         raise HTTPException(status_code=403, detail="Only successor may acknowledge handover")
     latest_v = repo.get_latest_version(case_id)
-    review.acknowledge_version(case_id, latest_v, by="Arjun Rao")
-    conn = db.get_conn()
-    conn.execute("UPDATE cases SET status = 'closed' WHERE id = ?", (case_id,))
-    conn.commit()
+    review.acknowledge_version(case_id, latest_v, by=principal.name)
+    repo.close_case(case_id, principal)
     return RedirectResponse(url=f"/case/{case_id}/handover", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/case/{case_id}/approvals", response_class=HTMLResponse)
 def approvals_view(request: Request, case_id: int):
     persona = get_persona_from_request(request)
-    case = repo.get_case(case_id, persona)
+    principal = get_principal_from_request(request, case_id)
+    case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
-    counts = get_nav_counts(case_id, persona)
-    versions_raw = repo.get_versions(case_id, persona)
+    counts = get_nav_counts(case_id, principal)
+    versions_raw = repo.get_versions(case_id, principal)
     versions = []
     for v in versions_raw:
         vd = dict(v)
@@ -618,6 +612,7 @@ def approvals_view(request: Request, case_id: int):
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "versions": versions,
@@ -667,9 +662,10 @@ def get_cached_leak():
 @app.get("/trust", response_class=HTMLResponse)
 def trust_view(request: Request):
     persona = get_persona_from_request(request)
-    case = repo.get_case(1, persona)
-    counts = get_nav_counts(1, persona) if case else {}
-    dropped_claims = repo.get_dropped_claims(1, persona)
+    principal = get_principal_from_request(request, 1)
+    case = repo.get_case(1, principal)
+    counts = get_nav_counts(1, principal) if case else {}
+    dropped_claims = repo.get_dropped_claims(1, principal)
 
     eval_results = get_cached_eval()
     leak_results = get_cached_leak()
@@ -692,6 +688,7 @@ def trust_view(request: Request):
         context={
             "request": request,
             "role": persona,
+            "principal": principal,
             "case": case,
             "counts": counts,
             "dropped_claims": dropped_claims,

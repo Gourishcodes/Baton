@@ -21,6 +21,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from app import db, extract, access
+from app.auth import demo_principal
 
 
 HONESTY_NOTE = "Synthetic data written by the team with Claude. Small sample. Not a benchmark."
@@ -283,8 +284,8 @@ def run_eval(
         tr03_ev = "No cross-label conflict found"
         if tr03_conf:
             c_labels = json.loads(tr03_conf["labels"])
-            succ_vis = access.visible(c_labels, "successor")
-            lead_vis = access.visible(c_labels, "lead")
+            succ_vis = access.visible(c_labels, demo_principal("successor"))
+            lead_vis = access.visible(c_labels, demo_principal("lead"))
             if not succ_vis and lead_vis:
                 tr03_pass = True
                 tr03_ev = (

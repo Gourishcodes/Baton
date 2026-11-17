@@ -208,10 +208,13 @@ def acknowledge_version(case_id: int, version_n: int, by: str):
 
 def seed_demo_decisions(case_id: int, conn=None):
     """Seed demo state: mark every claim with basis=sourced, no conflict flag
-    and no possibly_previously_rejected as approved by 'Divya Menon (seeded)'.
+    and no possibly_previously_rejected as approved by the case's approver (seeded).
     """
     if conn is None:
         conn = db.get_conn()
+
+    case_row = conn.execute("SELECT approver FROM cases WHERE id = ?", (case_id,)).fetchone()
+    approver = f"{case_row['approver']} (seeded)" if case_row and case_row["approver"] else "Divya Menon (seeded)"
 
     claims = conn.execute(
         "SELECT id, identity, basis, flags FROM claims WHERE case_id = ?",
@@ -227,8 +230,8 @@ def seed_demo_decisions(case_id: int, conn=None):
            not flags.get("possibly_previously_rejected"):
             conn.execute(
                 """INSERT OR REPLACE INTO decisions (identity, case_id, decision, edited_text, by, at, seeded)
-                   VALUES (?, ?, 'approved', NULL, 'Divya Menon (seeded)', ?, 1)""",
-                (claim["identity"], case_id, db.now_iso())
+                   VALUES (?, ?, 'approved', NULL, ?, ?, 1)""",
+                (claim["identity"], case_id, approver, db.now_iso())
             )
 
     conn.commit()

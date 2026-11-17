@@ -1,10 +1,11 @@
 """Access control for Baton.
 
-visible(item_labels, persona) is the ONLY authority for visibility decisions.
+visible(item_labels, principal) is the ONLY authority for visibility decisions.
 Templates never filter. Routes never filter. Repository functions call this.
 """
 import json
 import os
+from .auth import Principal
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
@@ -40,15 +41,17 @@ def persona_holds(persona: str, data_dir: str = DATA) -> set[str]:
     return set(roles[persona]["holds"])
 
 
-def visible(item_labels: list[str] | set[str], persona: str, data_dir: str = DATA) -> bool:
-    """An item is visible if its label set is a subset of what the persona holds.
+def visible(item_labels: list[str] | set[str], principal: Principal) -> bool:
+    """An item is visible if its label set is a subset of what the principal holds.
 
+    Empty labels are not visible; an item shows only if the principal holds all its labels.
     This is the ONLY place that decides visibility. Nothing else filters.
     """
+    if not isinstance(principal, Principal):
+        raise TypeError(f"Expected Principal, got {type(principal).__name__}")
     if not item_labels:
         return False
-    holds = persona_holds(persona, data_dir)
-    return set(item_labels).issubset(holds)
+    return set(item_labels).issubset(principal.holds)
 
 
 def persona_display(persona: str, data_dir: str = DATA) -> str:

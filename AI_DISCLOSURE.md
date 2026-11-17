@@ -45,3 +45,5 @@ Every module below was written or substantially shaped by AI (Antigravity / Clau
 - `tests/test_leak.py` — Tests for leak detection: zero leaks on clean state, canary injection catching, and positive controls.
 - `tests/test_core_loop.py` — Playwright end-to-end test verifying the full stranger demo loop from home page to closed handover.
 - `requirements.txt` — Pinned dependency versions.
+- `app/auth.py` — Principal dataclass and demo_principal role mapping for authorization.
+- `tests/test_round3_refactor.py` — Tests for case scoping, Principal type enforcement, drawer 404s, and multi-case demo reset.

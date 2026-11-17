@@ -12,6 +12,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
 
 from app import db, verify, access, repo, review
+from app.auth import demo_principal
 
 
 @pytest.fixture(autouse=True)
@@ -222,9 +223,9 @@ class TestCrossLabelConflictVisibility:
         verify.detect_conflicts(run_id, case_id)
 
         # Check visibility
-        successor_conflicts = repo.get_conflicts(case_id, "successor")
-        lead_conflicts = repo.get_conflicts(case_id, "lead")
-        finance_conflicts = repo.get_conflicts(case_id, "finance_ops")
+        successor_conflicts = repo.get_conflicts(case_id, demo_principal("successor", case_id=case_id))
+        lead_conflicts = repo.get_conflicts(case_id, demo_principal("lead", case_id=case_id))
+        finance_conflicts = repo.get_conflicts(case_id, demo_principal("finance_ops", case_id=case_id))
 
         # Successor sees no visible conflicts (team+finance label set)
         visible_successor = [c for c in successor_conflicts if c.get("visible")]
@@ -271,7 +272,8 @@ class TestCrossLabelConflictVisibility:
         verify.detect_conflicts(run_id, case_id)
 
         for persona in ["leaver", "successor", "lead", "finance_ops"]:
-            conflicts = repo.get_conflicts(case_id, persona)
+            p = demo_principal(persona, case_id=case_id)
+            conflicts = repo.get_conflicts(case_id, p)
             visible = [c for c in conflicts if c.get("visible")]
             assert len(visible) == 1, \
                 f"{persona} should see same-label conflict"

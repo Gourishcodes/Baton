@@ -47,10 +47,10 @@
   </table>
   </div>
 
-  {% if role == 'lead' %}
+  {% if role in ['lead', 'approver'] %}
   <div style="border-top:1px solid var(--ink);padding-top:var(--s6);max-width:480px">
     <h2 class="h2" style="margin-bottom:var(--s4)">Upload source</h2>
-    <form method="post" action="/case/1/sources" enctype="multipart/form-data">
+    <form method="post" action="/case/{{ case.id if case else 1 }}/sources" enctype="multipart/form-data">
       <div style="margin-bottom:var(--s3)">
         <label class="lbl" for="source_file">File</label>
         <input class="field field--sm" type="file" id="source_file" name="file" required style="width:100%">

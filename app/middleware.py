@@ -14,6 +14,7 @@ from starlette.responses import Response
 from itsdangerous import Signer
 
 from . import db, access
+from .auth import Principal, demo_principal
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CANARIES_PATH = os.path.join(ROOT, "data", "canaries.json")
@@ -36,6 +37,21 @@ def get_persona_from_request(request: Request) -> str:
     return "lead"
 
 
+def get_principal_from_request(request: Request, case_id: int | None = None) -> Principal:
+    """Extract the Principal from the signed baton_role cookie for the case."""
+    if case_id is None:
+        path_parts = request.url.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "case":
+            try:
+                case_id = int(path_parts[1])
+            except ValueError:
+                case_id = 1
+        else:
+            case_id = 1
+    persona = get_persona_from_request(request)
+    return demo_principal(persona, case_id=case_id)
+
+
 class WireCheckMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -50,8 +66,9 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
         body_bytes = b"".join(body_chunks)
         body_str = body_bytes.decode("utf-8", errors="replace")
 
+        principal = get_principal_from_request(request)
         persona = get_persona_from_request(request)
-        holds = access.persona_holds(persona)
+        holds = principal.holds
 
         # 1. Check for forbidden canaries
         forbidden_canaries = [

@@ -260,9 +260,14 @@ def extract_for_case(
     run_id = db.insert_run(case_id, mode=mode, provider=provider_name, model=model_name)
 
     try:
-        # Load sources and group lines by label set
+        # Load sources and group lines by label set for this case only
         all_lines = conn.execute(
-            "SELECT line_id, source_id, n, text, hash, labels FROM lines ORDER BY line_id"
+            """SELECT l.line_id, l.source_id, l.n, l.text, l.hash, l.labels
+               FROM lines l
+               JOIN sources s ON l.source_id = s.id
+               WHERE s.case_id = ?
+               ORDER BY l.line_id""",
+            (case_id,)
         ).fetchall()
 
         groups: dict[str, list[dict]] = {}
@@ -298,7 +303,10 @@ def extract_for_case(
                 cited_lines = claim_data.get("cites", [])
                 claim_labels = set(call_labels)
                 for cl in cited_lines:
-                    line_row = conn.execute("SELECT labels FROM lines WHERE line_id = ?", (cl,)).fetchone()
+                    line_row = conn.execute(
+                        "SELECT l.labels FROM lines l JOIN sources s ON l.source_id = s.id WHERE l.line_id = ? AND s.case_id = ?",
+                        (cl, case_id)
+                    ).fetchone()
                     if line_row:
                         claim_labels.update(json.loads(line_row["labels"]))
 

@@ -23,7 +23,7 @@
     <div class="spacer"></div>
     <form method="post" action="/role" class="persona" role="radiogroup" aria-label="Viewing as">
       <button type="submit" name="role" value="leaver" role="radio" aria-checked="{{ 'true' if (role == 'leaver') else 'false' }}">Leaver</button>
-      <button type="submit" name="role" value="lead" role="radio" aria-checked="{{ 'true' if (role == 'lead') else 'false' }}">Approver</button>
+      <button type="submit" name="role" value="lead" role="radio" aria-checked="{{ 'true' if (role in ['lead', 'approver']) else 'false' }}">Approver</button>
       <button type="submit" name="role" value="successor" role="radio" aria-checked="{{ 'true' if (role == 'successor') else 'false' }}">Successor</button>
     </form>
     <div class="notauth">Role switch for the demo. Not authentication.</div>
@@ -32,14 +32,15 @@
 
 <main id="main" class="wrap" style="padding-top:var(--s6);padding-bottom:var(--s16)">
   {% if case or active_tab %}
+  {% set current_case_id = case.id if case else 1 %}
   <nav class="tabs" aria-label="Case">
-    <a href="/case/1/sources" {% if active_tab == 'sources' %}aria-current="page"{% endif %}>Sources <span class="num">{{ counts.sources }}</span></a>
-    <a href="/case/1/claims" {% if active_tab == 'claims' %}aria-current="page"{% endif %}>Claims <span class="num">{{ counts.claims }}</span></a>
-    <a href="/case/1/gaps" {% if active_tab == 'gaps' %}aria-current="page"{% endif %}>Gaps <span class="num">{{ counts.gaps }}</span></a>
-    <a href="/case/1/conflicts" {% if active_tab == 'conflicts' %}aria-current="page"{% endif %}>Conflicts <span class="num">{{ counts.conflicts }}</span></a>
-    <a href="/case/1/timeline" {% if active_tab == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
-    <a href="/case/1/handover" {% if active_tab == 'handover' %}aria-current="page"{% endif %}>Handover <span class="num">v{{ counts.version or 1 }}</span></a>
-    <a href="/case/1/approvals" {% if active_tab == 'approvals' %}aria-current="page"{% endif %}>Approvals <span class="num">{{ counts.approvals }}</span></a>
+    <a href="/case/{{ current_case_id }}/sources" {% if active_tab == 'sources' %}aria-current="page"{% endif %}>Sources <span class="num">{{ counts.sources }}</span></a>
+    <a href="/case/{{ current_case_id }}/claims" {% if active_tab == 'claims' %}aria-current="page"{% endif %}>Claims <span class="num">{{ counts.claims }}</span></a>
+    <a href="/case/{{ current_case_id }}/gaps" {% if active_tab == 'gaps' %}aria-current="page"{% endif %}>Gaps <span class="num">{{ counts.gaps }}</span></a>
+    <a href="/case/{{ current_case_id }}/conflicts" {% if active_tab == 'conflicts' %}aria-current="page"{% endif %}>Conflicts <span class="num">{{ counts.conflicts }}</span></a>
+    <a href="/case/{{ current_case_id }}/timeline" {% if active_tab == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
+    <a href="/case/{{ current_case_id }}/handover" {% if active_tab == 'handover' %}aria-current="page"{% endif %}>Handover <span class="num">v{{ counts.version or 1 }}</span></a>
+    <a href="/case/{{ current_case_id }}/approvals" {% if active_tab == 'approvals' %}aria-current="page"{% endif %}>Approvals <span class="num">{{ counts.approvals }}</span></a>
     <a href="/trust" {% if active_tab == 'trust' %}aria-current="page"{% endif %}>Trust</a>
   </nav>
   {% endif %}

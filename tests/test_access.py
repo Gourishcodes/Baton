@@ -7,6 +7,13 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
 
 from app import access
+from app.auth import Principal, demo_principal
+
+
+def _get_test_principal(name: str) -> Principal:
+    if name == "nobody":
+        return Principal(99, "Nobody", "nobody@example.com", 1, "viewer", False, frozenset())
+    return demo_principal(name)
 
 
 class TestAccessVisible:
@@ -68,16 +75,19 @@ class TestAccessVisible:
         ([], "finance_ops", False),
     ])
     def test_visible(self, labels, persona, expected):
-        assert access.visible(labels, persona) == expected, \
+        p = _get_test_principal(persona)
+        assert access.visible(labels, p) == expected, \
             f"visible({labels}, {persona}) should be {expected}"
 
     def test_empty_labels_not_visible(self):
         """visible() must return False for an item whose label list is empty."""
-        for p in ["leaver", "successor", "lead", "finance_ops", "nobody"]:
+        for name in ["leaver", "successor", "lead", "finance_ops", "nobody"]:
+            p = _get_test_principal(name)
             assert access.visible([], p) is False
             assert access.visible(set(), p) is False
 
     def test_unknown_persona_sees_nothing(self):
         """An unknown persona holds nothing."""
-        assert access.visible(["team"], "nobody") is False
-        assert access.visible([], "nobody") is False
+        p = _get_test_principal("nobody")
+        assert access.visible(["team"], p) is False
+        assert access.visible([], p) is False

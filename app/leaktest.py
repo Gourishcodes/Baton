@@ -32,6 +32,7 @@ from starlette.testclient import TestClient
 from itsdangerous import Signer
 
 from app import db, repo, extract, review, access
+from app.auth import demo_principal
 from app.main import app
 from app.middleware import SECRET_KEY, CANARIES
 
@@ -109,7 +110,10 @@ def run_leak_test(verbose: bool = True):
         case_id = db.load_demo_case()
         extract.extract_for_case(case_id, mode="cache_only")
         review.seed_demo_decisions(case_id)
-        review.create_version(case_id, approved_by="Divya Menon (seeded)", seeded=True)
+        conn_init = db.get_conn()
+        case_obj = conn_init.execute("SELECT approver FROM cases WHERE id = ?", (case_id,)).fetchone()
+        approver = f"{case_obj['approver']} (seeded)" if case_obj and case_obj["approver"] else "Divya Menon (seeded)"
+        review.create_version(case_id, approved_by=approver, seeded=True)
 
         client = TestClient(app)
 
@@ -216,7 +220,8 @@ def run_leak_test(verbose: bool = True):
                 })
 
             # 3. Hidden claim 404 vs made-up ID 404 must be identical
-            claims_data = repo.get_claims(case_id, persona)
+            principal = demo_principal(persona, case_id=case_id)
+            claims_data = repo.get_claims(case_id, principal)
             hidden_ids = [c["id"] for c in claims_data if not c.get("visible", True)]
             if hidden_ids:
                 made_up_resp = client.get("/case/1/claims/99999/source")
@@ -278,7 +283,8 @@ def run_leak_test(verbose: bool = True):
                     label_failures.append("Successor handover contains tag elements")
 
             # 6. Answer-gap endpoint for hidden gaps
-            gaps_data = repo.get_gaps(case_id, persona)
+            principal = demo_principal(persona, case_id=case_id)
+            gaps_data = repo.get_gaps(case_id, principal)
             all_gaps = conn.execute(
                 "SELECT id FROM gaps WHERE case_id = ?", (case_id,)
             ).fetchall()
