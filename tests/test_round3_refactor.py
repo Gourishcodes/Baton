@@ -11,7 +11,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from app import db, repo, extract, review, main
-from app.auth import Principal, demo_principal
+from app.auth import Principal, demo_principal, login_as, seed_demo_accounts
 
 
 @pytest.fixture(autouse=True)
@@ -31,6 +31,7 @@ def isolated_db():
 def setup_two_cases():
     """Setup Case 1 (demo) and Case 2 with distinct sources, lines, claims, and gaps."""
     c1 = db.load_demo_case()
+    seed_demo_accounts()
     extract.extract_for_case(c1, mode="cache_only")
     review.seed_demo_decisions(c1)
     review.create_version(c1, approved_by="Divya Menon (seeded)", seeded=True)
@@ -139,8 +140,7 @@ def test_drawer_cross_case_line_returns_standard_404():
     """
     c1, c2 = setup_two_cases()
     client = TestClient(main.app)
-    signed = main.signer.sign(b"lead").decode("utf-8")
-    client.cookies["baton_role"] = signed
+    login_as(client, "lead")
 
     # Baseline: 404 for nonexistent line
     missing_resp = client.get("/case/1/claims/1/source?line=nonexistent:999")
@@ -167,8 +167,7 @@ def test_demo_reset_leaves_second_case_unchanged():
     assert len(c2_gaps_before) > 0
 
     client = TestClient(main.app)
-    signed = main.signer.sign(b"lead").decode("utf-8")
-    client.cookies["baton_role"] = signed
+    login_as(client, "lead")
 
     # POST /demo/reset
     resp = client.post("/demo/reset", follow_redirects=True)

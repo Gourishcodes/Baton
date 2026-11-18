@@ -220,3 +220,11 @@ label.lbl{display:block;font:500 11px/16px var(--mono);letter-spacing:.06em;text
   .counter{font-size:64px;line-height:64px}
   .doc{font-size:17px;line-height:26px}
 }
+
+/* additions */
+@media (max-width:900px){
+  .bar .wrap{gap:var(--s2)}
+  .persona button{padding:0 var(--s2);font-size:11px}
+  .bar .btn--quiet{padding:0 var(--s2);font-size:11px;height:28px}
+}
+

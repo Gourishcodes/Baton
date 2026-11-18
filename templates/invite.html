@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invitation &middot; Baton</title>
+<link rel="stylesheet" href="/static/baton.css">
+</head>
+<body>
+<div class="wrap" style="max-width:480px;padding-top:var(--s12);padding-bottom:var(--s16)">
+  <a class="wordmark" href="/" style="display:inline-flex;margin-bottom:var(--s6)">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style="margin-right:var(--s2)"><path d="M0 0H14L0 14Z" fill="#151512"/><path d="M13.5 .5V13.5H.5Z" fill="none" stroke="#151512"/></svg>
+    Baton
+  </a>
+
+  <h1 class="h1" style="margin-bottom:var(--s4)">You've been invited</h1>
+
+  <div class="banner" style="margin-bottom:var(--s6)">
+    You have been invited to join as <strong>{{ invite.role|capitalize }}</strong> with clearance:
+    <div style="margin-top:var(--s2)">
+      {% for l in invite.labels %}
+      <span class="tag tag--{{ l }}">{{ l }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <p style="margin-bottom:var(--s6);font-size:14px;line-height:22px">
+    Sign in to an existing account or create a new one to accept this invitation.
+  </p>
+
+  <div style="display:flex;gap:var(--s3)">
+    <a href="/login?invite={{ token }}" class="btn btn--primary" style="flex:1">Sign in to accept</a>
+    <a href="/signup?invite={{ token }}" class="btn" style="flex:1">Create account</a>
+  </div>
+</div>
+</body>
+</html>

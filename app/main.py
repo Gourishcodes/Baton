@@ -1,6 +1,6 @@
 """Main FastAPI application for Baton.
 
-Follows docs/SPEC.md sections 10, 7, and docs/DESIGN.md.
+Follows docs/SPEC.md sections 10, 7, docs/DESIGN.md, and ROUND3_SPEC.
 """
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -8,20 +8,59 @@ import json
 import os
 from typing import Annotated
 
-from fastapi import FastAPI, Request, Form, Response, HTTPException, status
+from fastapi import FastAPI, Request, Form, Response, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from itsdangerous import Signer
 
 from . import db, access, repo, review, extract
-from .auth import Principal, demo_principal
-from .middleware import WireCheckMiddleware, get_persona_from_request, get_principal_from_request, SECRET_KEY
+from .auth import (
+    Principal,
+    demo_principal,
+    get_user_from_token,
+    create_session,
+    delete_session,
+    is_login_throttled,
+    reset_login_attempts,
+    record_login_attempt,
+    is_signup_throttled,
+    record_signup_attempt,
+    create_user,
+    seed_demo_accounts,
+    create_invite,
+    get_invite,
+    redeem_invite,
+    verify_password,
+    get_client_ip,
+    get_max_users,
+    DEMO_PASSWORD,
+)
+from .middleware import WireCheckMiddleware, SECRET_KEY
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-signer = Signer(SECRET_KEY)
-
 templates = Jinja2Templates(directory=os.path.join(ROOT, "templates"))
+
+
+class AnonymousError(Exception):
+    def __init__(self, is_html_page: bool):
+        self.is_html_page = is_html_page
+
+
+class NoMembershipError(Exception):
+    pass
+
+
+def not_found_response():
+    """Identical 404 body for any missing or hidden item."""
+    html = (
+        "<!doctype html><html lang=\"en\"><head><title>Not found</title>"
+        "<link rel=\"stylesheet\" href=\"/static/baton.css\"></head><body>"
+        "<div class=\"wrap\" style=\"padding-top:var(--s8)\">"
+        "<h1 class=\"h1\">Not found</h1>"
+        "<p class=\"meta\" style=\"margin-top:var(--s2)\">The requested item does not exist or is outside your clearance.</p>"
+        "</div></body></html>"
+    )
+    return HTMLResponse(content=html, status_code=404)
 
 
 def ensure_demo_seeded():
@@ -39,6 +78,7 @@ def ensure_demo_seeded():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    seed_demo_accounts()
     ensure_demo_seeded()
     yield
 
@@ -46,6 +86,118 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Baton", lifespan=lifespan)
 app.add_middleware(WireCheckMiddleware)
 app.mount("/static", StaticFiles(directory=os.path.join(ROOT, "static")), name="static")
+
+
+@app.exception_handler(AnonymousError)
+async def anonymous_handler(request: Request, exc: AnonymousError):
+    if exc.is_html_page:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    return not_found_response()
+
+
+@app.exception_handler(NoMembershipError)
+async def no_membership_handler(request: Request, exc: NoMembershipError):
+    return not_found_response()
+
+
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc):
+    return not_found_response()
+
+
+def is_drawer_or_fragment_request(request: Request) -> bool:
+    path = request.url.path
+    if "/claims/" in path and path.endswith("/source"):
+        return True
+    if path.endswith("/drawer"):
+        return True
+    if request.headers.get("hx-request") == "true":
+        return True
+    if request.headers.get("accept") == "application/json":
+        return True
+    return False
+
+
+def get_current_principal(request: Request, case_id: int) -> Principal:
+    """Build the Principal from the session and {case_id} in path.
+    Anonymous gives redirect to /login for HTML pages, standard 404 for drawer / API.
+    No membership gives standard 404.
+    """
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+
+    is_html_page = not is_drawer_or_fragment_request(request)
+
+    if not user:
+        raise AnonymousError(is_html_page=is_html_page)
+
+    conn = db.get_conn()
+    membership = conn.execute(
+        "SELECT * FROM memberships WHERE case_id = ? AND user_id = ?",
+        (case_id, user["id"])
+    ).fetchone()
+
+    if not membership:
+        raise NoMembershipError()
+
+    labels = json.loads(membership["labels"])
+    principal = Principal(
+        user_id=user["id"],
+        name=user["name"],
+        email=user["email"],
+        case_id=case_id,
+        role=membership["role"],
+        is_owner=bool(membership["is_owner"]),
+        holds=frozenset(labels),
+        is_demo=bool(user.get("is_demo")),
+    )
+    request.state.principal = principal
+    request.state.user = user
+    return principal
+
+
+def get_top_level_principal(request: Request) -> tuple[dict, Principal]:
+    """Retrieve the principal for top-level routes (/ and /trust)."""
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+    if not user:
+        raise AnonymousError(is_html_page=True)
+
+    conn = db.get_conn()
+    membership = conn.execute(
+        "SELECT * FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+
+    if not membership:
+        principal = Principal(
+            user_id=user["id"],
+            name=user["name"],
+            email=user["email"],
+            case_id=1,
+            role="viewer",
+            is_owner=False,
+            holds=frozenset(),
+            is_demo=bool(user.get("is_demo")),
+        )
+        request.state.principal = principal
+        request.state.user = user
+        return user, principal
+
+    labels = json.loads(membership["labels"])
+    principal = Principal(
+        user_id=user["id"],
+        name=user["name"],
+        email=user["email"],
+        case_id=membership["case_id"],
+        role=membership["role"],
+        is_owner=bool(membership["is_owner"]),
+        holds=frozenset(labels),
+        is_demo=bool(user.get("is_demo")),
+    )
+    request.state.principal = principal
+    request.state.user = user
+    return user, principal
 
 
 def get_nav_counts(case_id: int, principal: Principal) -> dict:
@@ -67,92 +219,499 @@ def get_nav_counts(case_id: int, principal: Principal) -> dict:
     }
 
 
-def not_found_response():
-    """Identical 404 body for any missing or hidden item."""
-    html = (
-        "<!doctype html><html lang=\"en\"><head><title>Not found</title>"
-        "<link rel=\"stylesheet\" href=\"/static/baton.css\"></head><body>"
-        "<div class=\"wrap\" style=\"padding-top:var(--s8)\">"
-        "<h1 class=\"h1\">Not found</h1>"
-        "<p class=\"meta\" style=\"margin-top:var(--s2)\">The requested item does not exist or is outside your clearance.</p>"
-        "</div></body></html>"
-    )
-    return HTMLResponse(content=html, status_code=404)
-
-
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_get(request: Request):
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+    if user:
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    invite = request.query_params.get("invite")
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={
+            "request": request,
+            "demo_password": DEMO_PASSWORD,
+            "invite": invite,
+            "error": None,
+        }
+    )
+
+
+@app.post("/login")
+async def login_post(request: Request):
+    form = await request.form()
+    email = str(form.get("email", "")).strip()
+    password = str(form.get("password", ""))
+    invite = form.get("invite")
+
+    ip = get_client_ip(request)
+
+    if is_login_throttled(email, ip):
+        return Response("Try again later", status_code=429)
+
+    conn = db.get_conn()
+    user = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
+    if not user:
+        seed_demo_accounts(conn)
+        user = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
+
+    if not user or not verify_password(password, user["pw_hash"]):
+        record_login_attempt(email, ip)
+        if is_login_throttled(email, ip):
+            return Response("Try again later", status_code=429)
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "request": request,
+                "demo_password": DEMO_PASSWORD,
+                "invite": invite,
+                "error": "Invalid email or password",
+            },
+            status_code=401,
+        )
+
+    # Success
+    reset_login_attempts(email, ip)
+
+    if invite:
+        try:
+            redeem_invite(str(invite), user["id"])
+        except ValueError:
+            pass
+
+    raw_token = create_session(user["id"])
+
+    mem = conn.execute(
+        "SELECT case_id FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+
+    target_url = f"/case/{mem['case_id']}/claims" if mem else "/"
+    response = RedirectResponse(url=target_url, status_code=status.HTTP_303_SEE_OTHER)
+
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    response.set_cookie(
+        key="baton_session",
+        value=raw_token,
+        max_age=12 * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+    )
+    if user["is_demo"]:
+        # Find demo role name
+        role_rev_map = {
+            "divya@example.com": "lead",
+            "meera@example.com": "leaver",
+            "arjun@example.com": "successor",
+            "sameer@example.com": "finance_ops",
+        }
+        r_name = role_rev_map.get(user["email"], "lead")
+        response.set_cookie(
+            key="baton_role",
+            value=r_name,
+            max_age=12 * 3600,
+            httponly=True,
+            samesite="lax",
+            secure=is_https,
+        )
+
+    return response
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_get(request: Request):
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+    if user:
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    invite = request.query_params.get("invite")
+    return templates.TemplateResponse(
+        request=request,
+        name="signup.html",
+        context={"request": request, "invite": invite, "error": None}
+    )
+
+
+@app.post("/signup")
+async def signup_post(request: Request):
+    form = await request.form()
+    name = str(form.get("name", "")).strip()
+    email = str(form.get("email", "")).strip()
+    password = str(form.get("password", ""))
+    invite = form.get("invite")
+
+    ip = get_client_ip(request)
+
+    if is_signup_throttled(ip):
+        return Response("Too many signups from this IP. Try again later.", status_code=429)
+
+    if len(password) < 10:
+        return templates.TemplateResponse(
+            request=request,
+            name="signup.html",
+            context={
+                "request": request,
+                "invite": invite,
+                "error": "Password must be at least 10 characters",
+            },
+            status_code=400,
+        )
+
+    conn = db.get_conn()
+    count_row = conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+    if count_row and count_row["cnt"] >= get_max_users():
+        return templates.TemplateResponse(
+            request=request,
+            name="signup.html",
+            context={
+                "request": request,
+                "invite": invite,
+                "error": "Registration limit reached",
+            },
+            status_code=400,
+        )
+
+    existing = conn.execute("SELECT id FROM users WHERE email = ?", (email.lower(),)).fetchone()
+    if existing:
+        return templates.TemplateResponse(
+            request=request,
+            name="signup.html",
+            context={
+                "request": request,
+                "invite": invite,
+                "error": "An account with this email already exists",
+            },
+            status_code=400,
+        )
+
+    try:
+        user_id = create_user(email, name, password)
+    except Exception as e:
+        return templates.TemplateResponse(
+            request=request,
+            name="signup.html",
+            context={"request": request, "invite": invite, "error": str(e)},
+            status_code=400,
+        )
+
+    record_signup_attempt(ip)
+
+    if invite:
+        try:
+            redeem_invite(str(invite), user_id)
+        except ValueError:
+            pass
+
+    raw_token = create_session(user_id)
+
+    mem = conn.execute(
+        "SELECT case_id FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
+        (user_id,)
+    ).fetchone()
+
+    target_url = f"/case/{mem['case_id']}/claims" if mem else "/"
+    response = RedirectResponse(url=target_url, status_code=status.HTTP_303_SEE_OTHER)
+
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    response.set_cookie(
+        key="baton_session",
+        value=raw_token,
+        max_age=12 * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+    )
+    return response
+
+
+@app.post("/logout")
+def logout(request: Request):
+    raw_token = request.cookies.get("baton_session")
+    if raw_token:
+        delete_session(raw_token)
+    response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    response.delete_cookie("baton_session")
+    response.delete_cookie("baton_role")
+    return response
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, 1)
-    case = repo.get_case(1, principal)
-    counts = get_nav_counts(1, principal) if case else {}
+    user, principal = get_top_level_principal(request)
+    case = repo.get_case(principal.case_id, principal)
+    counts = get_nav_counts(principal.case_id, principal) if case else {}
     return templates.TemplateResponse(
         request=request,
         name="home.html",
-        context={"request": request, "role": persona, "principal": principal, "case": case, "counts": counts, "active_tab": ""}
+        context={
+            "request": request,
+            "role": principal.role,
+            "principal": principal,
+            "user": user,
+            "case": case,
+            "counts": counts,
+            "active_tab": "",
+        }
     )
 
 
 @app.post("/role")
 def switch_role(request: Request, role: Annotated[str, Form()]):
-    """Switch persona role via signed cookie and redirect back."""
-    allowed_roles = ["leaver", "lead", "successor", "finance_ops"]
-    target_role = role if role in allowed_roles else "lead"
+    """Create a real session for the matching seeded demo account (ROUND3_SPEC 1.4)."""
+    role_map = {
+        "lead": "divya@example.com",
+        "approver": "divya@example.com",
+        "leaver": "meera@example.com",
+        "successor": "arjun@example.com",
+        "finance_ops": "sameer@example.com",
+    }
+    normalized = role.lower().strip()
+    if normalized not in role_map:
+        raise HTTPException(status_code=400, detail="Invalid demo role")
+
+    email = role_map[normalized]
+    conn = db.get_conn()
+    user = conn.execute("SELECT id FROM users WHERE email = ? AND is_demo = 1", (email,)).fetchone()
+    if not user:
+        seed_demo_accounts(conn)
+        user = conn.execute("SELECT id FROM users WHERE email = ? AND is_demo = 1", (email,)).fetchone()
+
+    raw_token = create_session(user["id"], conn=conn)
 
     referer = request.headers.get("referer") or "/case/1/claims"
     response = RedirectResponse(url=referer, status_code=status.HTTP_303_SEE_OTHER)
 
-    signed_val = signer.sign(target_role.encode("utf-8")).decode("utf-8")
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
     response.set_cookie(
-        key="baton_role",
-        value=signed_val,
+        key="baton_session",
+        value=raw_token,
+        max_age=12 * 3600,
         httponly=True,
         samesite="lax",
+        secure=is_https,
+    )
+    response.set_cookie(
+        key="baton_role",
+        value=normalized,
+        max_age=12 * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
     )
     return response
 
 
 @app.post("/demo/open")
-def demo_open():
+def demo_open(request: Request):
     """Open the demo case as Approver with drawer open on C1:026."""
     ensure_demo_seeded()
+    seed_demo_accounts()
+    conn = db.get_conn()
+    user = conn.execute("SELECT id FROM users WHERE email = 'divya@example.com'").fetchone()
+    raw_token = create_session(user["id"], conn=conn)
 
     response = RedirectResponse(
         url="/case/1/claims?open_cite=C1:026",
         status_code=status.HTTP_303_SEE_OTHER,
     )
-    signed_val = signer.sign(b"lead").decode("utf-8")
-    response.set_cookie(
-        key="baton_role",
-        value=signed_val,
-        httponly=True,
-        samesite="lax",
-    )
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    response.set_cookie(key="baton_session", value=raw_token, max_age=12 * 3600, httponly=True, samesite="lax", secure=is_https)
+    response.set_cookie(key="baton_role", value="lead", max_age=12 * 3600, httponly=True, samesite="lax", secure=is_https)
     return response
 
 
 @app.post("/demo/reset")
-def demo_reset():
+def demo_reset(request: Request):
     """Reset the demo case (case 1 only) back to initial seeded state."""
     repo.reset_demo_case(1)
     review.seed_demo_decisions(1)
     review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
+    seed_demo_accounts()
+
+    conn = db.get_conn()
+    user = conn.execute("SELECT id FROM users WHERE email = 'divya@example.com'").fetchone()
+    raw_token = create_session(user["id"], conn=conn)
 
     response = RedirectResponse(url="/case/1/claims", status_code=status.HTTP_303_SEE_OTHER)
-    signed_val = signer.sign(b"lead").decode("utf-8")
-    response.set_cookie(key="baton_role", value=signed_val, httponly=True, samesite="lax")
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    response.set_cookie(key="baton_session", value=raw_token, max_age=12 * 3600, httponly=True, samesite="lax", secure=is_https)
+    response.set_cookie(key="baton_role", value="lead", max_age=12 * 3600, httponly=True, samesite="lax", secure=is_https)
     return response
 
 
+@app.get("/invite/{token}", response_class=HTMLResponse)
+def view_invite(request: Request, token: str):
+    """View and redeem an invitation."""
+    invite = get_invite(token)
+    if not invite:
+        return not_found_response()
+
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+    if user:
+        case_id = redeem_invite(token, user["id"])
+        return RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="invite.html",
+        context={"request": request, "invite": invite, "token": token}
+    )
+
+
+@app.get("/case/{case_id}/members", response_class=HTMLResponse)
+def members_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    """Owner view of case members and invitations."""
+    if not principal.is_owner:
+        return not_found_response()
+
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    counts = get_nav_counts(case_id, principal)
+
+    conn = db.get_conn()
+    rows = conn.execute(
+        "SELECT m.*, u.email, u.name FROM memberships m JOIN users u ON m.user_id = u.id "
+        "WHERE m.case_id = ? ORDER BY m.added_at ASC",
+        (case_id,)
+    ).fetchall()
+
+    members = []
+    for r in rows:
+        d = dict(r)
+        d["labels_list"] = json.loads(d["labels"])
+        members.append(d)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="members.html",
+        context={
+            "request": request,
+            "role": principal.role,
+            "principal": principal,
+            "case": case,
+            "counts": counts,
+            "members": members,
+            "invite_url": None,
+            "active_tab": "members",
+            "is_demo": principal.is_demo,
+        }
+    )
+
+
+@app.post("/case/{case_id}/members/{target_user_id}")
+async def update_member(
+    request: Request,
+    case_id: int,
+    target_user_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    """Owner updates role and clearance for a case member. Demo users cannot change shared state."""
+    if principal.is_demo or not principal.is_owner:
+        return not_found_response()
+
+    form = await request.form()
+    role = str(form.get("role", "viewer")).strip()
+    labels = form.getlist("labels")
+
+    allowed_roles = {"approver", "leaver", "successor", "viewer"}
+    if role not in allowed_roles:
+        role = "viewer"
+
+    allowed_labels = {"team", "finance", "hr"}
+    clean_labels = [l for l in labels if l in allowed_labels]
+
+    conn = db.get_conn()
+    conn.execute(
+        "UPDATE memberships SET role = ?, labels = ? WHERE case_id = ? AND user_id = ?",
+        (role, json.dumps(sorted(clean_labels)), case_id, target_user_id)
+    )
+    conn.commit()
+
+    return RedirectResponse(url=f"/case/{case_id}/members", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/case/{case_id}/invites")
+async def create_case_invite(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    """Owner creates an invitation link. Demo users cannot change shared state."""
+    if principal.is_demo or not principal.is_owner:
+        return not_found_response()
+
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    form = await request.form()
+    role = str(form.get("role", "viewer")).strip()
+    labels = form.getlist("labels")
+
+    allowed_roles = {"approver", "leaver", "successor", "viewer"}
+    if role not in allowed_roles:
+        role = "viewer"
+
+    allowed_labels = {"team", "finance", "hr"}
+    clean_labels = [l for l in labels if l in allowed_labels]
+
+    token = create_invite(case_id, role, clean_labels, principal.user_id)
+    invite_url = f"/invite/{token}"
+
+    counts = get_nav_counts(case_id, principal)
+
+    conn = db.get_conn()
+    rows = conn.execute(
+        "SELECT m.*, u.email, u.name FROM memberships m JOIN users u ON m.user_id = u.id "
+        "WHERE m.case_id = ? ORDER BY m.added_at ASC",
+        (case_id,)
+    ).fetchall()
+
+    members = []
+    for r in rows:
+        d = dict(r)
+        d["labels_list"] = json.loads(d["labels"])
+        members.append(d)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="members.html",
+        context={
+            "request": request,
+            "role": principal.role,
+            "principal": principal,
+            "case": case,
+            "counts": counts,
+            "members": members,
+            "invite_url": invite_url,
+            "active_tab": "members",
+        }
+    )
+
+
 @app.get("/case/{case_id}/sources", response_class=HTMLResponse)
-def sources_view(request: Request, case_id: int):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
+def sources_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -165,7 +724,7 @@ def sources_view(request: Request, case_id: int):
         name="sources.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -177,7 +736,11 @@ def sources_view(request: Request, case_id: int):
 
 
 @app.post("/case/{case_id}/sources")
-def upload_source(request: Request, case_id: int):
+def upload_source(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     """Stub upload source for now; redirect back to sources."""
     return RedirectResponse(url=f"/case/{case_id}/sources", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -186,12 +749,11 @@ def upload_source(request: Request, case_id: int):
 def claims_view(
     request: Request,
     case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
     type: str | None = None,
     needs_review: int | None = None,
     open_cite: str | None = None,
 ):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -199,7 +761,6 @@ def claims_view(
     all_claims = repo.get_claims(case_id, principal)
     counts = get_nav_counts(case_id, principal)
 
-    # Filter counts
     filter_counts = {
         "all": len(all_claims),
         "needs_review": sum(1 for c in all_claims if c.get("visible") and (not c.get("decision") or c.get("decision", {}).get("decision") == "pending")),
@@ -211,7 +772,6 @@ def claims_view(
         "NextAction": sum(1 for c in all_claims if c.get("visible") and c.get("type") == "NextAction"),
     }
 
-    # Filter claims for display
     displayed_claims = all_claims
     if type:
         displayed_claims = [c for c in all_claims if not c.get("visible") or c.get("type") == type]
@@ -220,25 +780,28 @@ def claims_view(
 
     restricted_count = sum(1 for c in displayed_claims if not c.get("visible"))
 
-    # Handle drawer opening
-    drawer_html = None
-    drawer_open = False
-    if open_cite:
-        source_id = open_cite.split(":")[0]
-        src, lines = repo.get_lines_for_source(case_id, source_id, principal)
-        if src and lines and any(l["line_id"] == open_cite for l in lines):
-            drawer_open = True
-            drawer_html = templates.get_template("drawer.html").render({
-                "source": src,
-                "lines": lines,
-                "target_line_id": open_cite,
-                "cite_count": 1,
-                "case": case,
-            })
+    run = repo.get_latest_run(case_id)
 
-    # If this is an HTMX request for ledger only:
+    drawer_open = False
+    drawer_html = ""
+    if open_cite:
+        try:
+            source_id = open_cite.split(":")[0]
+            src, lines = repo.get_lines_for_source(case_id, source_id, principal)
+            if src and lines and any(l["line_id"] == open_cite for l in lines):
+                drawer_open = True
+                drawer_html = templates.get_template("drawer.html").render({
+                    "request": request,
+                    "source": src,
+                    "lines": lines,
+                    "target_line_id": open_cite,
+                    "cite_count": 1,
+                    "case": case,
+                })
+        except Exception:
+            drawer_open = False
+
     if request.headers.get("HX-Request") == "true" and not request.headers.get("HX-Target") == "drawer":
-        # Render the ledger-content fragment
         ledger_template = templates.env.from_string("""
 {% import "_macros.html" as m %}
 <div class="ledger" role="list">
@@ -256,7 +819,7 @@ def claims_view(
 """)
         return HTMLResponse(ledger_template.render({
             "claims": displayed_claims,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "restricted_count": restricted_count,
@@ -268,7 +831,7 @@ def claims_view(
         name="claims.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -276,10 +839,11 @@ def claims_view(
             "claims": displayed_claims,
             "current_filter": type,
             "needs_review": bool(needs_review),
-            "restricted_count": restricted_count,
+            "run": run,
             "drawer_open": drawer_open,
             "drawer_html": drawer_html,
             "open_line": open_cite,
+            "restricted_count": restricted_count,
             "is_seeded_demo": (case_id == 1),
             "active_tab": "claims",
         }
@@ -287,10 +851,14 @@ def claims_view(
 
 
 @app.get("/case/{case_id}/claims/{cid}/source", response_class=HTMLResponse)
-def claim_source_drawer(request: Request, case_id: int, cid: int, line: str | None = None):
+def claim_source_drawer(
+    request: Request,
+    case_id: int,
+    cid: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    line: str | None = None,
+):
     """Drawer partial for a claim cite. Returns 404 for hidden or invalid claim or line from another case."""
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -335,13 +903,12 @@ async def claim_decision(
     request: Request,
     case_id: int,
     cid: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
     action: str | None = None,
     text: str | None = None,
 ):
     """Approve, edit, reject, or restore a claim (Approver only)."""
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
-    if persona not in ("lead", "approver") and principal.role != "approver":
+    if principal.role != "approver":
         raise HTTPException(status_code=403, detail="Only approver may record decisions")
 
     form = {}
@@ -357,7 +924,6 @@ async def claim_decision(
     if not claim or not claim.get("identity"):
         return not_found_response()
 
-    # If action is edit and no text was submitted, return inline editing form
     if action == "edit" and not edited_text:
         edit_form_template = templates.env.from_string("""
 <form hx-post="/case/{{ case_id }}/claims/{{ claim.id }}/decision" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML" class="claim claim--{{ claim.basis }}" id="claim-{{ claim.id }}">
@@ -385,15 +951,17 @@ async def claim_decision(
 {% import "_macros.html" as m %}
 {{ m.claim_card(claim, persona=role, case_id=case_id) }}
 """)
-        return HTMLResponse(claim_macro_template.render({"claim": updated_claim, "role": persona, "case_id": case_id}))
+        return HTMLResponse(claim_macro_template.render({"claim": updated_claim, "role": principal.role, "case_id": case_id}))
 
     return RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/case/{case_id}/gaps", response_class=HTMLResponse)
-def gaps_view(request: Request, case_id: int):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
+def gaps_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -405,7 +973,7 @@ def gaps_view(request: Request, case_id: int):
         name="gaps.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -417,11 +985,14 @@ def gaps_view(request: Request, case_id: int):
 
 
 @app.post("/case/{case_id}/gaps/{gid}/answer")
-async def answer_gap(request: Request, case_id: int, gid: int):
+async def answer_gap(
+    request: Request,
+    case_id: int,
+    gid: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     """Answer a gap (Leaver or Lead). Hidden gap returns identical 404."""
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
-    if persona not in ("leaver", "lead") and principal.role not in ("leaver", "approver"):
+    if principal.role not in ("leaver", "approver"):
         raise HTTPException(status_code=403, detail="Only leaver or approver may answer gaps")
 
     gap = repo.get_gap(case_id, gid, principal)
@@ -446,9 +1017,11 @@ async def answer_gap(request: Request, case_id: int, gid: int):
 
 
 @app.get("/case/{case_id}/conflicts", response_class=HTMLResponse)
-def conflicts_view(request: Request, case_id: int):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
+def conflicts_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -461,7 +1034,7 @@ def conflicts_view(request: Request, case_id: int):
         name="conflicts.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -473,10 +1046,12 @@ def conflicts_view(request: Request, case_id: int):
 
 
 @app.get("/case/{case_id}/timeline", response_class=HTMLResponse)
-def timeline_view(request: Request, case_id: int):
+def timeline_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     import re
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -509,7 +1084,7 @@ def timeline_view(request: Request, case_id: int):
         name="timeline.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -520,9 +1095,11 @@ def timeline_view(request: Request, case_id: int):
 
 
 @app.get("/case/{case_id}/handover", response_class=HTMLResponse)
-def handover_view(request: Request, case_id: int):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
+def handover_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -532,7 +1109,6 @@ def handover_view(request: Request, case_id: int):
     latest_version_obj = repo.get_version(case_id, latest_v, principal) if latest_v > 0 else None
     ack = repo.get_acknowledgement(case_id, latest_v) if latest_v > 0 else None
 
-    # Handover content = claims whose decision is approved or edited, filtered by principal
     claims = repo.get_claims(case_id, principal)
     approved_claims = [c for c in claims if c.get("decision") and c["decision"].get("decision") in ("approved", "edited")]
     unanswered_gaps = [g for g in repo.get_gaps(case_id, principal) if g.get("status") == "open"]
@@ -553,7 +1129,7 @@ def handover_view(request: Request, case_id: int):
         name="handover.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -566,22 +1142,26 @@ def handover_view(request: Request, case_id: int):
 
 
 @app.post("/case/{case_id}/approve-handover")
-def approve_handover(request: Request, case_id: int):
-    """Approve handover (Lead only). Creates version n+1."""
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
-    if persona not in ("lead", "approver") and principal.role != "approver":
+def approve_handover(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    """Approve handover (Approver only). Creates version n+1."""
+    if principal.role != "approver":
         raise HTTPException(status_code=403, detail="Only approver may approve handover")
     review.create_version(case_id, approved_by=principal.name)
     return RedirectResponse(url=f"/case/{case_id}/handover", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/case/{case_id}/acknowledge")
-def acknowledge_handover(request: Request, case_id: int):
+def acknowledge_handover(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     """Acknowledge receipt (Successor only). Closes the case."""
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
-    if persona != "successor" and principal.role != "successor":
+    if principal.role != "successor":
         raise HTTPException(status_code=403, detail="Only successor may acknowledge handover")
     latest_v = repo.get_latest_version(case_id)
     review.acknowledge_version(case_id, latest_v, by=principal.name)
@@ -590,9 +1170,11 @@ def acknowledge_handover(request: Request, case_id: int):
 
 
 @app.get("/case/{case_id}/approvals", response_class=HTMLResponse)
-def approvals_view(request: Request, case_id: int):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, case_id)
+def approvals_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
     case = repo.get_case(case_id, principal)
     if not case:
         return not_found_response()
@@ -611,7 +1193,7 @@ def approvals_view(request: Request, case_id: int):
         name="approvals.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
             "case": case,
             "counts": counts,
@@ -661,11 +1243,10 @@ def get_cached_leak():
 
 @app.get("/trust", response_class=HTMLResponse)
 def trust_view(request: Request):
-    persona = get_persona_from_request(request)
-    principal = get_principal_from_request(request, 1)
-    case = repo.get_case(1, principal)
-    counts = get_nav_counts(1, principal) if case else {}
-    dropped_claims = repo.get_dropped_claims(1, principal)
+    user, principal = get_top_level_principal(request)
+    case = repo.get_case(principal.case_id, principal)
+    counts = get_nav_counts(principal.case_id, principal) if case else {}
+    dropped_claims = repo.get_dropped_claims(principal.case_id, principal)
 
     eval_results = get_cached_eval()
     leak_results = get_cached_leak()
@@ -687,8 +1268,9 @@ def trust_view(request: Request):
         name="trust.html",
         context={
             "request": request,
-            "role": persona,
+            "role": principal.role,
             "principal": principal,
+            "user": user,
             "case": case,
             "counts": counts,
             "dropped_claims": dropped_claims,
@@ -705,6 +1287,11 @@ def trust_view(request: Request):
 @app.post("/trust/leak-test")
 def trust_leak_test(request: Request):
     """Run the leak test live and stream/redirect."""
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+    if not user:
+        return not_found_response()
+
     global _cached_leak_results, _cached_leak_total, _last_leak_run
     from . import leaktest as lt
     res = lt.run_leak_test(verbose=False)
@@ -757,6 +1344,11 @@ def trust_leak_test(request: Request):
 @app.post("/trust/eval")
 def trust_eval(request: Request):
     """Run the accuracy check live and stream/redirect."""
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+    if not user:
+        return not_found_response()
+
     global _cached_eval_results, _last_eval_run
     from . import eval as ev
     res = ev.run_eval()

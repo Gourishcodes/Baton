@@ -203,7 +203,7 @@
           <button type="submit" class="btn btn--primary">Acknowledge receipt</button>
         </form>
         {% endif %}
-      {% elif role == 'lead' %}
+      {% elif role in ['lead', 'approver'] %}
         <form method="post" action="/case/{{ case.id }}/approve-handover">
           <button type="submit" class="btn btn--primary">Approve handover</button>
         </form>

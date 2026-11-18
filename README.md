@@ -4,12 +4,13 @@ Baton is a fail-closed engineering handover system that extracts structured, ver
 
 ## Quickstart
 
-Run locally in four commands:
+Run locally in four commands (note: `SECRET_KEY` is required in the environment for local runs):
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .\.venv\Scripts\activate
 pip install -r requirements.txt
+export SECRET_KEY="your-secret-key"  # On Windows: $env:SECRET_KEY="your-secret-key"
 python -m uvicorn app.main:app --port 8000
 ```
 
@@ -51,7 +52,8 @@ Antigravity and Claude wrote most of the code across the application, verificati
 
 ## Limits
 
-- **Role switching**: The role selector switches personas via signed cookies for evaluation and demo purposes; it is not an enterprise authentication or identity provider system.
+- **Accounts & Persistence**: User accounts are open for sign-up (capped by `MAX_USERS`, default 200) without email verification or password reset. On free-tier cloud hosts with ephemeral storage, accounts and cases can vanish when the host restarts.
+- **Role switching**: The role selector switches demo accounts for evaluation purposes; demo accounts share a public password. Real accounts do not.
 - **Canary scanning**: Scanning response bodies for planted canary strings is a strong fail-closed check, not a mathematical proof of confidentiality.
 - **Metadata leakage**: Showing counts of hidden items reveals to lower clearances that confidential items exist.
 - **Sample size**: The evaluation suite uses a small synthetic sample written for this challenge, not an industry-wide benchmark.

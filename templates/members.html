@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Members &middot; {{ case.name }} &middot; Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s6);max-width:960px">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--s6)">
+    <div>
+      <h1 class="h1">Members</h1>
+      <p class="meta" style="margin-top:var(--s1)">Case members, roles, and clearance boundaries. Changes apply on the member's next request.</p>
+    </div>
+  </div>
+
+  {% if principal.is_demo %}
+  <div class="banner" style="margin-bottom:var(--s6)">
+    Demo accounts cannot change shared state. Member roles and clearances are read-only.
+  </div>
+  {% endif %}
+
+  {% if invite_url %}
+  <div class="banner" style="margin-bottom:var(--s6)">
+    <strong>Invite link created:</strong> <a href="{{ invite_url }}">{{ invite_url }}</a> &middot; Single use, valid for 7 days.
+  </div>
+  {% endif %}
+
+  <table class="tbl" aria-label="Members" style="margin-bottom:var(--s10)">
+    <thead>
+      <tr>
+        <th>Member</th>
+        <th>Role</th>
+        <th>Clearance</th>
+        <th>Added</th>
+        <th class="num">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td>
+          <b>{{ m.name }}</b><br>
+          <span class="meta">{{ m.email }}</span>
+          {% if m.is_owner %}<span class="tag" style="margin-left:var(--s1)">owner</span>{% endif %}
+        </td>
+        <td>
+          {% if principal.is_demo %}
+          <span class="tag">{{ m.role|capitalize }}</span>
+          {% else %}
+          <form id="member-form-{{ m.user_id }}" method="post" action="/case/{{ case.id }}/members/{{ m.user_id }}" style="margin:0">
+            <select name="role" class="field field--sm" style="width:auto">
+              <option value="approver" {% if m.role == 'approver' %}selected{% endif %}>Approver</option>
+              <option value="leaver" {% if m.role == 'leaver' %}selected{% endif %}>Leaver</option>
+              <option value="successor" {% if m.role == 'successor' %}selected{% endif %}>Successor</option>
+              <option value="viewer" {% if m.role == 'viewer' %}selected{% endif %}>Viewer</option>
+            </select>
+          {% endif %}
+        </td>
+        <td>
+          {% if principal.is_demo %}
+          <span class="meta">{{ m.labels_list|join(', ') }}</span>
+          {% else %}
+            <label style="display:inline-flex;align-items:center;gap:4px;margin-right:var(--s2);font-size:13px">
+              <input type="checkbox" name="labels" value="team" {% if 'team' in m.labels_list %}checked{% endif %}> team
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:4px;margin-right:var(--s2);font-size:13px">
+              <input type="checkbox" name="labels" value="finance" {% if 'finance' in m.labels_list %}checked{% endif %}> finance
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px">
+              <input type="checkbox" name="labels" value="hr" {% if 'hr' in m.labels_list %}checked{% endif %}> hr
+            </label>
+          {% endif %}
+        </td>
+        <td>
+          <span class="meta">{{ m.added_at[:10] if m.added_at else 'Initial' }}</span>
+        </td>
+        <td class="num">
+          {% if principal.is_demo %}
+          <span class="meta">&mdash;</span>
+          {% else %}
+            <button type="submit" class="btn btn--quiet">Save</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="border-top:1px solid var(--rule);padding-top:var(--s6);max-width:560px">
+    <h2 class="h2" style="margin-bottom:var(--s3)">Invite a new member</h2>
+    {% if principal.is_demo %}
+    <p class="meta">Invitations cannot be created from demo accounts. Sign in with a registered account to invite members.</p>
+    {% else %}
+    <p class="meta" style="margin-bottom:var(--s4)">Generate a single-use invite link. When redeemed, the person joins with the specified role and clearance.</p>
+
+    <form method="post" action="/case/{{ case.id }}/invites">
+      <div style="margin-bottom:var(--s4)">
+        <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">Role</label>
+        <select name="role" class="field field--sm" style="width:100%">
+          <option value="viewer" selected>Viewer</option>
+          <option value="successor">Successor</option>
+          <option value="leaver">Leaver</option>
+          <option value="approver">Approver</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:var(--s4)">
+        <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">Clearance</label>
+        <label style="display:inline-flex;align-items:center;gap:4px;margin-right:var(--s3);font-size:13px">
+          <input type="checkbox" name="labels" value="team" checked> team
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;margin-right:var(--s3);font-size:13px">
+          <input type="checkbox" name="labels" value="finance"> finance
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px">
+          <input type="checkbox" name="labels" value="hr"> hr
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn--primary">Create invite link</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

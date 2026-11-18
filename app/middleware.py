@@ -1,20 +1,23 @@
-"""Wire-check middleware for Baton.
+"""Wire-check and security middleware for Baton.
 
-Implements SPEC section 7:
+Implements SPEC section 7 and ROUND3_SPEC sections 1.2, 1.4:
+- Refuses to start without SECRET_KEY (except under pytest)
+- Rejects cross-origin POSTs (Origin / Referer host mismatch)
 - Defence in depth on every HTML response
-- Scans response body for canaries the persona must not see
+- Scans response body for canaries the principal must not see
 - Fails closed: replaces response with error page, logs to audit, returns 500
 - Replaces <!-- WIRE_STRIP --> with wire strip stating scan results
 """
 import json
 import os
+import sys
+from urllib.parse import urlparse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from itsdangerous import Signer
 
 from . import db, access
-from .auth import Principal, demo_principal
+from .auth import Principal
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CANARIES_PATH = os.path.join(ROOT, "data", "canaries.json")
@@ -22,38 +25,35 @@ CANARIES_PATH = os.path.join(ROOT, "data", "canaries.json")
 with open(CANARIES_PATH, encoding="utf-8") as f:
     CANARIES = json.load(f)
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "baton-dev-secret-key-123")
-signer = Signer(SECRET_KEY)
+
+def _is_running_under_pytest() -> bool:
+    return "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST") is not None
 
 
-def get_persona_from_request(request: Request) -> str:
-    """Extract and verify the persona from the signed baton_role cookie."""
-    cookie = request.cookies.get("baton_role")
-    if cookie:
-        try:
-            return signer.unsign(cookie.encode("utf-8")).decode("utf-8")
-        except Exception:
-            return "lead"
-    return "lead"
-
-
-def get_principal_from_request(request: Request, case_id: int | None = None) -> Principal:
-    """Extract the Principal from the signed baton_role cookie for the case."""
-    if case_id is None:
-        path_parts = request.url.path.strip("/").split("/")
-        if len(path_parts) >= 2 and path_parts[0] == "case":
-            try:
-                case_id = int(path_parts[1])
-            except ValueError:
-                case_id = 1
-        else:
-            case_id = 1
-    persona = get_persona_from_request(request)
-    return demo_principal(persona, case_id=case_id)
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    if _is_running_under_pytest():
+        SECRET_KEY = "baton-pytest-secret-key-1234567890"
+    else:
+        raise RuntimeError("SECRET_KEY environment variable is not set. Baton refuses to start.")
 
 
 class WireCheckMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # 1. Origin rule for every POST (ROUND3_SPEC 1.2)
+        if request.method == "POST":
+            origin = request.headers.get("origin")
+            host = request.headers.get("host", "").lower()
+            if origin:
+                origin_host = urlparse(origin).netloc.lower()
+                if origin_host != host:
+                    return Response("Cross-origin request rejected", status_code=403)
+            elif "referer" in request.headers:
+                referer = request.headers.get("referer")
+                referer_host = urlparse(referer).netloc.lower()
+                if referer_host != host:
+                    return Response("Cross-origin request rejected", status_code=403)
+
         response = await call_next(request)
 
         # Only process HTML responses
@@ -66,11 +66,11 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
         body_bytes = b"".join(body_chunks)
         body_str = body_bytes.decode("utf-8", errors="replace")
 
-        principal = get_principal_from_request(request)
-        persona = get_persona_from_request(request)
-        holds = principal.holds
+        principal = getattr(request.state, "principal", None)
+        holds = principal.holds if principal else frozenset()
+        persona = principal.role if principal else "anonymous"
 
-        # 1. Check for forbidden canaries
+        # Check for forbidden canaries
         forbidden_canaries = [
             c["text"] for c in CANARIES if c["group"] not in holds
         ]
@@ -103,9 +103,9 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
                     media_type="text/html",
                 )
 
-        # 2. If clean, append/inject the wire strip
+        # Replace wire strip placeholder if present
         if "<!-- WIRE_STRIP -->" in body_str:
-            if persona == "lead":
+            if principal and principal.role == "approver" and {"team", "finance", "hr"}.issubset(principal.holds):
                 strip = (
                     '<div class="wire" style="margin-top:var(--s8)">'
                     '<span class="label">Wire check</span>'
@@ -113,9 +113,9 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
                     '<span>Role: Approver &middot; clearance: team, finance, hr</span>'
                     '</div>'
                 )
-            else:
-                display_role = access.persona_display(persona).split(" - ")[0]
-                clearance_str = ", ".join(sorted(holds))
+            elif principal:
+                display_role = principal.role.capitalize()
+                clearance_str = ", ".join(sorted(principal.holds)) if principal.holds else "none"
                 n_forbidden = len(forbidden_canaries)
                 strip = (
                     f'<div class="wire" style="margin-top:var(--s8)">'
@@ -124,11 +124,12 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
                     f'<span>Role: {display_role} &middot; clearance: {clearance_str}</span>'
                     f'</div>'
                 )
+            else:
+                strip = ""
 
             body_str = body_str.replace("<!-- WIRE_STRIP -->", strip)
             new_bytes = body_str.encode("utf-8")
 
-            # Reconstruct response with updated content-length
             headers = dict(response.headers)
             headers["content-length"] = str(len(new_bytes))
             return Response(
@@ -138,7 +139,6 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
                 media_type="text/html",
             )
 
-        # Return unmodified body if no placeholder
         headers = dict(response.headers)
         headers["content-length"] = str(len(body_bytes))
         return Response(

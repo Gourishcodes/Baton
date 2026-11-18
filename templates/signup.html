@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign up &middot; Baton</title>
+<link rel="stylesheet" href="/static/baton.css">
+</head>
+<body>
+<div class="wrap" style="max-width:480px;padding-top:var(--s12);padding-bottom:var(--s16)">
+  <a class="wordmark" href="/" style="display:inline-flex;margin-bottom:var(--s6)">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style="margin-right:var(--s2)"><path d="M0 0H14L0 14Z" fill="#151512"/><path d="M13.5 .5V13.5H.5Z" fill="none" stroke="#151512"/></svg>
+    Baton
+  </a>
+
+  <h1 class="h1" style="margin-bottom:var(--s4)">Sign up</h1>
+
+  {% if error %}
+  <div class="banner" style="margin-bottom:var(--s4);border-color:var(--conflict);color:var(--conflict)">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <div class="banner" style="margin-bottom:var(--s4)">
+    Accounts are not email-verified, there is no password reset, and accounts can vanish when the free host restarts.
+  </div>
+
+  <form method="post" action="/signup" style="margin-bottom:var(--s6)">
+    {% if invite %}
+    <input type="hidden" name="invite" value="{{ invite }}">
+    {% endif %}
+
+    <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+      Full name
+    </label>
+    <input type="text" name="name" required class="field field--sm" style="width:100%;margin-bottom:var(--s3)">
+
+    <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+      Email
+    </label>
+    <input type="email" name="email" required class="field field--sm" style="width:100%;margin-bottom:var(--s3)">
+
+    <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+      Password (at least 10 characters)
+    </label>
+    <input type="password" name="password" minlength="10" required class="field field--sm" style="width:100%;margin-bottom:var(--s4)">
+
+    <button type="submit" class="btn btn--primary" style="width:100%">Create account</button>
+  </form>
+
+  <p class="meta">
+    <a href="/login{% if invite %}?invite={{ invite }}{% endif %}">Already have an account? Sign in</a>
+  </p>
+</div>
+</body>
+</html>

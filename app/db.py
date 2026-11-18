@@ -152,6 +152,54 @@ CREATE TABLE IF NOT EXISTS dropped_claims (
     cites TEXT NOT NULL,  -- JSON array
     reason TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    pw_hash TEXT NOT NULL,
+    is_demo INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS memberships (
+    case_id INTEGER NOT NULL REFERENCES cases(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL,
+    is_owner INTEGER NOT NULL DEFAULT 0,
+    labels TEXT NOT NULL,  -- JSON array
+    added_by INTEGER,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY(case_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS invites (
+    token_hash TEXT PRIMARY KEY,
+    case_id INTEGER NOT NULL REFERENCES cases(id),
+    role TEXT NOT NULL,
+    labels TEXT NOT NULL,  -- JSON array
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+    email TEXT,
+    ip TEXT,
+    at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(email, ip, at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id);
 """
 
 _local = threading.local()

@@ -147,6 +147,8 @@ class TestLeakTest:
 
         # 2. Fetch /trust page and extract the scanned count from the caption under the counter
         client = TestClient(app)
+        from app.auth import login_as
+        login_as(client, "lead")
         resp = client.get("/trust")
         assert resp.status_code == 200
 
@@ -181,6 +183,8 @@ class TestLeakTest:
         assert lead_claims_before > 0
 
         client = TestClient(app)
+        from app.auth import login_as
+        login_as(client, "lead")
 
         # Standard POST + redirect
         resp = client.post("/trust/leak-test", follow_redirects=True)
@@ -240,6 +244,8 @@ class TestLeakTest:
         assert lead_claims_before > 0
 
         client = TestClient(app)
+        from app.auth import login_as
+        login_as(client, "lead")
 
         # Standard POST + redirect
         resp = client.post("/trust/eval", follow_redirects=True)

@@ -28,16 +28,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import secrets
+if "SECRET_KEY" not in os.environ:
+    os.environ["SECRET_KEY"] = secrets.token_hex(32)
+
 from starlette.testclient import TestClient
-from itsdangerous import Signer
 
 from app import db, repo, extract, review, access
-from app.auth import demo_principal
+from app.auth import demo_principal, seed_demo_accounts, login_as
 from app.main import app
 from app.middleware import SECRET_KEY, CANARIES
-
-
-signer = Signer(SECRET_KEY)
 
 # Fixed redacted markup (from SPEC section 7 / DESIGN.md section 5)
 REDACTED_PATTERN = re.compile(
@@ -70,9 +70,8 @@ VIEWS = [
 
 
 def _set_persona(client, persona):
-    """Set the persona cookie on the test client."""
-    signed = signer.sign(persona.encode("utf-8")).decode("utf-8")
-    client.cookies["baton_role"] = signed
+    """Sign in via the real login endpoint as persona."""
+    login_as(client, persona)
 
 
 _last_leak_results = None
@@ -108,6 +107,7 @@ def run_leak_test(verbose: bool = True):
 
     try:
         case_id = db.load_demo_case()
+        seed_demo_accounts()
         extract.extract_for_case(case_id, mode="cache_only")
         review.seed_demo_decisions(case_id)
         conn_init = db.get_conn()

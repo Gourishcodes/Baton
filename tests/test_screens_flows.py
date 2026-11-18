@@ -19,13 +19,13 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from app import db, repo, extract, review, main, access
+from app.auth import login_as, seed_demo_accounts
 
 client = TestClient(main.app)
 
 
 def set_role_cookie(persona: str):
-    signed = main.signer.sign(persona.encode("utf-8")).decode("utf-8")
-    client.cookies["baton_role"] = signed
+    login_as(client, persona)
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +35,7 @@ def clean_db():
     tmp.close()
     db.set_db_path(tmp.name)
     case_id = db.load_demo_case()
+    seed_demo_accounts()
     extract.extract_for_case(case_id, mode="cache_only")
     review.seed_demo_decisions(case_id)
     review.create_version(case_id, approved_by="Divya Menon (seeded)", seeded=True)
