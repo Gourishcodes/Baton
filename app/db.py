@@ -197,9 +197,21 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS access_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    user_id INTEGER,
+    case_id INTEGER,
+    route TEXT,
+    action TEXT,
+    items TEXT,
+    labels_seen TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(email, ip, at);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_log_case_user ON access_log(case_id, user_id);
 """
 
 _local = threading.local()

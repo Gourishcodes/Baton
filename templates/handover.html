@@ -17,7 +17,7 @@
     {% if sections.owners %}
       {% for item in sections.owners %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}">
+        <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
           {% if role != 'successor' %}
@@ -41,7 +41,7 @@
     {% if sections.risks %}
       {% for item in sections.risks %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}{% if item.flags.get('conflict_with') %} item--conflict{% endif %}">
+        <p class="item item--{{ item.basis }}{% if item.flags.get('conflict_with') %} item--conflict{% endif %}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           {% if item.flags.get('conflict_with') %}
           <span class="basis basis--conflict">Conflict</span>
@@ -69,7 +69,7 @@
     {% if sections.dependencies %}
       {% for item in sections.dependencies %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}">
+        <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
           {% if role != 'successor' %}
@@ -93,7 +93,7 @@
     {% if sections.open %}
       {% for item in sections.open %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}">
+        <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
           {% if role != 'successor' %}
@@ -128,7 +128,7 @@
     {% if sections.actions %}
       {% for item in sections.actions %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}">
+        <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           {% if item.due %}<span class="mono" style="font-size:13px;color:var(--ink-2)">Due {{ item.due }}</span>{% endif %}
           {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
@@ -153,7 +153,7 @@
     {% if sections.decisions %}
       {% for item in sections.decisions %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}">
+        <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
           {% if role != 'successor' %}
@@ -177,7 +177,7 @@
     <h3 style="font:500 20px/26px var(--serif);margin:var(--s6) 0 var(--s3);color:var(--ink-2)">History</h3>
       {% for item in sections.history %}
         {% if item.visible %}
-        <p class="item item--{{ item.basis }}" style="color:var(--ink-3)">
+        <p class="item item--{{ item.basis }}" style="color:var(--ink-3)" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
           {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
           <span class="meta" style="font-size:12px">(Superseded)</span>
           {% for c in item.cites %}
@@ -191,7 +191,11 @@
     {% endif %}
 
     <div style="margin-top:var(--s8);padding-top:var(--s4);border-top:1px solid var(--rule)">
-      {% if latest_version %}
+      {% if latest_version and latest_version.n > 0 %}
+      <div style="display:flex;gap:var(--s2);margin-bottom:var(--s4)">
+        <a href="/case/{{ case.id }}/handover.md" class="btn btn--quiet">Download Markdown</a>
+        <a href="/case/{{ case.id }}/handover/print" target="_blank" class="btn btn--quiet">Open print page</a>
+      </div>
       <p class="aside" style="margin-bottom:var(--s3)">Approved by {{ latest_version.approved_by }}, version {{ latest_version.n }}, {{ latest_version.approved_at[:16].replace('T', ' ') }}.</p>
       {% endif %}
 

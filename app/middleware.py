@@ -56,15 +56,23 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        # Only process HTML responses
-        content_type = response.headers.get("content-type", "")
-        if "text/html" not in content_type:
+        # Scan every response whose type starts with text/ or is application/json (ROUND3_SPEC 3.4)
+        content_type = response.headers.get("content-type", "").lower()
+        is_scanned_type = (
+            content_type.startswith("text/")
+            or content_type.startswith("application/json")
+            or "application/json" in content_type
+        )
+        if not is_scanned_type:
             return response
 
         # Read response body
         body_chunks = [chunk async for chunk in response.body_iterator]
         body_bytes = b"".join(body_chunks)
         body_str = body_bytes.decode("utf-8", errors="replace")
+
+        # Also check the Content-Disposition filename
+        content_disp = response.headers.get("content-disposition", "")
 
         principal = getattr(request.state, "principal", None)
         holds = principal.holds if principal else frozenset()
@@ -76,7 +84,7 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
         ]
 
         for canary in forbidden_canaries:
-            if canary in body_str:
+            if canary in body_str or canary in content_disp:
                 # Log leak to audit table
                 try:
                     conn = db.get_conn()
@@ -89,22 +97,31 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
                     pass
 
                 # Fail closed: return 500
-                error_html = (
-                    "<!doctype html><html lang=\"en\"><head><title>Blocked</title>"
-                    "<link rel=\"stylesheet\" href=\"/static/baton.css\"></head><body>"
-                    "<div class=\"wrap\" style=\"padding-top:var(--s8)\">"
-                    "<h1 class=\"h1\" style=\"margin-bottom:var(--s4)\">Blocked</h1>"
-                    "<div class=\"banner\">Blocked: a restricted string reached this response</div>"
-                    "</div></body></html>"
-                )
+                if "text/html" in content_type:
+                    error_content = (
+                        "<!doctype html><html lang=\"en\"><head><title>Blocked</title>"
+                        "<link rel=\"stylesheet\" href=\"/static/baton.css\"></head><body>"
+                        "<div class=\"wrap\" style=\"padding-top:var(--s8)\">"
+                        "<h1 class=\"h1\" style=\"margin-bottom:var(--s4)\">Blocked</h1>"
+                        "<div class=\"banner\">Blocked: a restricted string reached this response</div>"
+                        "</div></body></html>"
+                    )
+                    media_type = "text/html"
+                elif "application/json" in content_type:
+                    error_content = json.dumps({"error": "Blocked: a restricted string reached this response"})
+                    media_type = "application/json"
+                else:
+                    error_content = "Blocked: a restricted string reached this response\n"
+                    media_type = "text/plain; charset=utf-8"
+
                 return Response(
-                    content=error_html,
+                    content=error_content,
                     status_code=500,
-                    media_type="text/html",
+                    media_type=media_type,
                 )
 
-        # Replace wire strip placeholder if present
-        if "<!-- WIRE_STRIP -->" in body_str:
+        # Replace wire strip placeholder if present (HTML only)
+        if "text/html" in content_type and "<!-- WIRE_STRIP -->" in body_str:
             if principal and principal.role == "approver" and {"team", "finance", "hr"}.issubset(principal.holds):
                 strip = (
                     '<div class="wire" style="margin-top:var(--s8)">'

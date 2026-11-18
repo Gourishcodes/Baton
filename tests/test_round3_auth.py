@@ -59,6 +59,7 @@ def test_anonymous_get_every_route_redirect_or_404_no_case_text():
         "/case/1/conflicts",
         "/case/1/timeline",
         "/case/1/handover",
+        "/case/1/handover/print",
         "/case/1/approvals",
         "/case/1/members",
     ]
@@ -73,12 +74,13 @@ def test_anonymous_get_every_route_redirect_or_404_no_case_text():
         assert "Dispatch notifications" not in resp.text
         assert "Tanvi Shetty" not in resp.text
 
-    # Drawer / API route returns standard 404
-    drawer_resp = client.get("/case/1/claims/1/source", follow_redirects=False)
-    assert drawer_resp.status_code == 404
-    assert "PW-CONTRACT-7731" not in drawer_resp.text
-    assert "Dispatch notifications" not in drawer_resp.text
-    assert "Tanvi Shetty" not in drawer_resp.text
+    # Drawer / API / Export route returns standard 404
+    for non_html_route in ["/case/1/claims/1/source", "/case/1/handover.md"]:
+        r = client.get(non_html_route, follow_redirects=False)
+        assert r.status_code == 404
+        assert "PW-CONTRACT-7731" not in r.text
+        assert "Dispatch notifications" not in r.text
+        assert "Tanvi Shetty" not in r.text
 
 
 def test_tampered_expired_and_deleted_sessions_behave_as_anonymous():

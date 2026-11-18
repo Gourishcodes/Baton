@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Handover Document &middot; {{ case.name }} &middot; Baton{% endblock %}
+
+{% block content %}
+<div class="print-wrap" style="padding-top:var(--s4);max-width:680px">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--s6)">
+    <div>
+      <h1 class="h1">Handover Document</h1>
+      <p class="meta" style="margin-top:var(--s1)">{{ case.name }} &middot; Filtered to your clearance</p>
+    </div>
+    <div>
+      <button type="button" class="btn btn--primary" onclick="window.print()">Print or save as PDF</button>
+    </div>
+  </div>
+
+  <div class="doc">
+    <h2>Who owns what</h2>
+    {% set vis_owners = sections.owners|selectattr('visible')|list %}
+    {% if vis_owners %}
+      {% for item in vis_owners %}
+      <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+    {% endif %}
+
+    <h2>What is at risk</h2>
+    {% set vis_risks = sections.risks|selectattr('visible')|list %}
+    {% if vis_risks %}
+      {% for item in vis_risks %}
+      <p class="item item--{{ item.basis }}{% if item.flags.get('conflict_with') %} item--conflict{% endif %}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        {% if item.flags.get('conflict_with') %}
+        <span class="basis basis--conflict">Conflict</span>
+        {% elif item.basis != 'sourced' %}
+        <span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>
+        {% endif %}
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+    {% endif %}
+
+    <h2>What depends on what</h2>
+    {% set vis_deps = sections.dependencies|selectattr('visible')|list %}
+    {% if vis_deps %}
+      {% for item in vis_deps %}
+      <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+    {% endif %}
+
+    <h2>What is open</h2>
+    {% set vis_open = sections.open|selectattr('visible')|list %}
+    {% set vis_open_gaps = sections.open_gaps|selectattr('visible')|list %}
+    {% if vis_open or vis_open_gaps %}
+      {% for item in vis_open %}
+      <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+      {% for gap in vis_open_gaps %}
+      <p class="item item--attested" style="border-left-color:var(--inferred)">
+        Open question: {{ gap.question }}
+        {% for c in gap.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+    {% endif %}
+
+    <h2>What to do first</h2>
+    {% set vis_actions = sections.actions|selectattr('visible')|list %}
+    {% if vis_actions %}
+      {% for item in vis_actions %}
+      <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        {% if item.due %}<span class="mono" style="font-size:13px;color:var(--ink-2)">Due {{ item.due }}</span>{% endif %}
+        {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+    {% endif %}
+
+    <h2>Decisions and why</h2>
+    {% set vis_decisions = sections.decisions|selectattr('visible')|list %}
+    {% if vis_decisions %}
+      {% for item in vis_decisions %}
+      <p class="item item--{{ item.basis }}" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        {% if item.basis != 'sourced' %}<span class="basis basis--{{ item.basis }}">{{ item.basis|capitalize }}</span>{% endif %}
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+    {% endif %}
+
+    {% set vis_history = sections.history|selectattr('visible')|list %}
+    {% if vis_history %}
+    <h3 style="font:500 20px/26px var(--serif);margin:var(--s6) 0 var(--s3);color:var(--ink-2)">History</h3>
+      {% for item in vis_history %}
+      <p class="item item--{{ item.basis }}" style="color:var(--ink-3)" data-claim-id="{{ item.id }}"><!-- claim:{{ item.id }} -->
+        {{ item.decision.edited_text if (item.decision and item.decision.edited_text) else item.text }}
+        <span class="meta" style="font-size:12px">(Superseded)</span>
+        {% for c in item.cites %}
+        <span class="cite">{{ c.line_id.replace(':', '·') }}</span>
+        {% endfor %}
+      </p>
+      {% endfor %}
+    {% endif %}
+
+    <footer class="print-footer" style="margin-top:var(--s8);padding-top:var(--s4);border-top:1px solid var(--rule)">
+      <p class="aside">Handover version {{ latest_version.n }}, approved by {{ latest_version.approved_by }}, {{ latest_version.approved_at[:16].replace('T', ' ') }}. Exported for {{ principal.name }}, {{ export_time }}.</p>
+    </footer>
+  </div>
+</div>
+{% endblock %}

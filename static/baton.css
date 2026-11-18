@@ -227,4 +227,20 @@ label.lbl{display:block;font:500 11px/16px var(--mono);letter-spacing:.06em;text
   .persona button{padding:0 var(--s2);font-size:11px}
   .bar .btn--quiet{padding:0 var(--s2);font-size:11px;height:28px}
 }
+@media print{
+  .bar, .tabs, .wire, .btn, button {
+    display: none !important;
+  }
+  .doc, .print-wrap {
+    max-width: 680px !important;
+    margin: 0 auto !important;
+  }
+  .item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-footer {
+    display: block !important;
+  }
+}
 

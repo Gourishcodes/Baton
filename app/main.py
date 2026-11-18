@@ -3,7 +3,7 @@
 Follows docs/SPEC.md sections 10, 7, docs/DESIGN.md, and ROUND3_SPEC.
 """
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 from typing import Annotated
@@ -107,6 +107,8 @@ async def custom_404_handler(request: Request, exc):
 
 def is_drawer_or_fragment_request(request: Request) -> bool:
     path = request.url.path
+    if path.endswith(".md"):
+        return True
     if "/claims/" in path and path.endswith("/source"):
         return True
     if path.endswith("/drawer"):
@@ -1105,24 +1107,9 @@ def handover_view(
         return not_found_response()
     counts = get_nav_counts(case_id, principal)
 
-    latest_v = repo.get_latest_version(case_id)
-    latest_version_obj = repo.get_version(case_id, latest_v, principal) if latest_v > 0 else None
-    ack = repo.get_acknowledgement(case_id, latest_v) if latest_v > 0 else None
-
-    claims = repo.get_claims(case_id, principal)
-    approved_claims = [c for c in claims if c.get("decision") and c["decision"].get("decision") in ("approved", "edited")]
-    unanswered_gaps = [g for g in repo.get_gaps(case_id, principal) if g.get("status") == "open"]
-
-    sections = {
-        "owners": [c for c in approved_claims if c.get("type") == "Owner"],
-        "risks": [c for c in approved_claims if c.get("type") == "Risk" or c.get("flags", {}).get("conflict_with")],
-        "dependencies": [c for c in approved_claims if c.get("type") == "Dependency"],
-        "open": [c for c in approved_claims if c.get("type") == "OpenQuestion"],
-        "open_gaps": unanswered_gaps,
-        "actions": sorted([c for c in approved_claims if c.get("type") == "NextAction"], key=lambda x: x.get("due") or "9999"),
-        "decisions": [c for c in approved_claims if c.get("type") == "Decision" and not c.get("flags", {}).get("superseded_by")],
-        "history": [c for c in approved_claims if c.get("flags", {}).get("superseded_by")],
-    }
+    handover_data = repo.build_handover(case_id, principal)
+    if not handover_data:
+        return not_found_response()
 
     return templates.TemplateResponse(
         request=request,
@@ -1133,9 +1120,80 @@ def handover_view(
             "principal": principal,
             "case": case,
             "counts": counts,
-            "latest_version": latest_version_obj,
-            "acknowledgement": ack,
-            "sections": sections,
+            "latest_version": handover_data["latest_version"],
+            "acknowledgement": handover_data["acknowledgement"],
+            "sections": handover_data["sections"],
+            "active_tab": "handover",
+        }
+    )
+
+
+@app.get("/case/{case_id}/handover.md")
+def handover_export_markdown(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    """Permission-safe Markdown export (ROUND3_SPEC 3.1)."""
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    handover_data = repo.build_handover(case_id, principal)
+    if not handover_data or not handover_data.get("latest_version") or handover_data["latest_version"]["n"] < 1:
+        return not_found_response()
+
+    md_content = repo.render_handover_markdown(handover_data, principal)
+    slug = repo.slugify(handover_data["case"]["name"])
+    version_n = handover_data["latest_version"]["n"]
+    filename = f"handover-{slug}-v{version_n}.md"
+
+    repo.log_export(case_id, principal.user_id, request.url.path, "markdown", version_n)
+
+    return Response(
+        content=md_content,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.get("/case/{case_id}/handover/print", response_class=HTMLResponse)
+def handover_export_print(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    """Permission-safe print page (ROUND3_SPEC 3.1)."""
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    handover_data = repo.build_handover(case_id, principal)
+    if not handover_data or not handover_data.get("latest_version") or handover_data["latest_version"]["n"] < 1:
+        return not_found_response()
+
+    version_n = handover_data["latest_version"]["n"]
+    repo.log_export(case_id, principal.user_id, request.url.path, "print", version_n)
+
+    counts = get_nav_counts(case_id, principal)
+    now_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="print.html",
+        context={
+            "request": request,
+            "role": principal.role,
+            "principal": principal,
+            "case": handover_data["case"],
+            "counts": counts,
+            "latest_version": handover_data["latest_version"],
+            "acknowledgement": handover_data["acknowledgement"],
+            "sections": handover_data["sections"],
+            "export_time": now_at,
             "active_tab": "handover",
         }
     )
@@ -1261,7 +1319,7 @@ def trust_view(request: Request):
         leak_scanned_summary = f"{total_scanned} strings scanned, {views_per_persona} views per persona, {n_personas} personas"
     else:
         leak_total = _cached_leak_total
-        leak_scanned_summary = "1298 strings scanned, 59 views per persona, 4 personas"
+        leak_scanned_summary = "1342 strings scanned, 61 views per persona, 4 personas"
 
     return templates.TemplateResponse(
         request=request,

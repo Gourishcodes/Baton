@@ -3,7 +3,9 @@
 Every function takes a Principal and filters through access.visible().
 Templates never filter. Routes never filter. This is the only data layer.
 """
+from datetime import datetime, timezone
 import json
+import re
 
 from . import db, access
 from .auth import Principal
@@ -492,4 +494,189 @@ def reset_demo_case(case_id: int = 1):
     )
     conn.execute("DELETE FROM claims WHERE case_id = ? AND basis = 'attested'", (case_id,))
     conn.execute("UPDATE cases SET status = 'open' WHERE id = ?", (case_id,))
+    conn.commit()
+
+
+def build_handover(case_id: int, principal: Principal) -> dict:
+    """Single source for handover assembly (SPEC section 2).
+    Returns dict with case, latest_version, version, acknowledgement, and sections.
+    """
+    _check_principal(principal)
+    case = get_case(case_id, principal)
+    if not case:
+        return {}
+
+    latest_v = get_latest_version(case_id)
+    latest_version_obj = get_version(case_id, latest_v, principal) if latest_v > 0 else None
+    ack = get_acknowledgement(case_id, latest_v) if latest_v > 0 else None
+
+    claims = get_claims(case_id, principal)
+    approved_claims = [c for c in claims if c.get("decision") and c["decision"].get("decision") in ("approved", "edited")]
+    unanswered_gaps = [g for g in get_gaps(case_id, principal) if g.get("status") == "open"]
+
+    sections = {
+        "owners": [c for c in approved_claims if c.get("type") == "Owner"],
+        "risks": [c for c in approved_claims if c.get("type") == "Risk" or c.get("flags", {}).get("conflict_with")],
+        "dependencies": [c for c in approved_claims if c.get("type") == "Dependency"],
+        "open": [c for c in approved_claims if c.get("type") == "OpenQuestion"],
+        "open_gaps": unanswered_gaps,
+        "actions": sorted([c for c in approved_claims if c.get("type") == "NextAction"], key=lambda x: x.get("due") or "9999"),
+        "decisions": [c for c in approved_claims if c.get("type") == "Decision" and not c.get("flags", {}).get("superseded_by")],
+        "history": [c for c in approved_claims if c.get("flags", {}).get("superseded_by")],
+    }
+
+    return {
+        "case": case,
+        "latest_version": latest_version_obj,
+        "version": latest_v,
+        "acknowledgement": ack,
+        "sections": sections,
+    }
+
+
+def slugify(text: str) -> str:
+    """Generate slug containing only lowercase letters, digits, and hyphens."""
+    s = text.lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")
+    return s or "case"
+
+
+def escape_markdown(text: str) -> str:
+    """Escape Markdown control characters so claim text cannot inject formatting, links, or HTML."""
+    if not text:
+        return ""
+    chars_to_escape = r"\`*_{}[]()#<>|~"
+    res = []
+    for ch in text:
+        if ch in chars_to_escape:
+            res.append(f"\\{ch}")
+        else:
+            res.append(ch)
+    return "".join(res)
+
+
+def render_handover_markdown(handover_data: dict, principal: Principal) -> str:
+    """Render permission-safe Markdown export (SPEC section 3.2).
+    - Same sections and order as screen from build_handover
+    - Restricted items absent (no bars, no counts, no label names)
+    - Citations as line IDs only (e.g. C1·026)
+    - Markdown control characters escaped in claim text
+    - Footer with version, approver, approval time, who it was exported for, export time
+    """
+    case = handover_data["case"]
+    sections = handover_data["sections"]
+    latest_version = handover_data.get("latest_version")
+    if not latest_version:
+        raise ValueError("Cannot render markdown for unapproved handover")
+
+    lines = []
+    lines.append(f"# Handover Document &middot; {case['name']}")
+    lines.append("")
+
+    def _render_claim(item: dict) -> str:
+        raw_text = (
+            item["decision"].get("edited_text")
+            if (item.get("decision") and item["decision"].get("edited_text"))
+            else item.get("text", "")
+        )
+        text = escape_markdown(raw_text)
+
+        badges = []
+        if item.get("flags", {}).get("conflict_with"):
+            badges.append("[Conflict]")
+        elif item.get("basis") != "sourced":
+            badges.append(f"[{item.get('basis', '').capitalize()}]")
+
+        if item.get("due"):
+            badges.append(f"(Due {item['due']})")
+
+        cites = [c["line_id"].replace(":", "·") for c in item.get("cites", [])]
+        cite_str = " ".join(cites)
+
+        parts = [text]
+        if badges:
+            parts.extend(badges)
+        if cite_str:
+            parts.append(cite_str)
+        parts.append(f"<!-- claim:{item['id']} -->")
+        return "- " + " ".join(parts)
+
+    def _render_section(title: str, items: list[dict], extra_items: list[dict] = None):
+        lines.append(f"## {title}")
+        lines.append("")
+        vis_items = [it for it in items if it.get("visible", True)]
+        vis_extra = [it for it in (extra_items or []) if it.get("visible", True)]
+
+        if not vis_items and not vis_extra:
+            lines.append("None")
+            lines.append("")
+            return
+
+        for it in vis_items:
+            lines.append(_render_claim(it))
+
+        for gap in vis_extra:
+            q_text = escape_markdown(gap.get("question", ""))
+            cites = [c["line_id"].replace(":", "·") for c in gap.get("cites", [])]
+            cite_str = " ".join(cites)
+            parts = [f"Open question: {q_text}"]
+            if cite_str:
+                parts.append(cite_str)
+            lines.append("- " + " ".join(parts))
+
+        lines.append("")
+
+    _render_section("Who owns what", sections.get("owners", []))
+    _render_section("What is at risk", sections.get("risks", []))
+    _render_section("What depends on what", sections.get("dependencies", []))
+    _render_section("What is open", sections.get("open", []), sections.get("open_gaps", []))
+    _render_section("What to do first", sections.get("actions", []))
+    _render_section("Decisions and why", sections.get("decisions", []))
+
+    history_items = [it for it in sections.get("history", []) if it.get("visible", True)]
+    if history_items:
+        lines.append("### History")
+        lines.append("")
+        for it in history_items:
+            raw_text = (
+                it["decision"].get("edited_text")
+                if (it.get("decision") and it["decision"].get("edited_text"))
+                else it.get("text", "")
+            )
+            text = escape_markdown(raw_text)
+            cites = [c["line_id"].replace(":", "·") for c in it.get("cites", [])]
+            cite_str = " ".join(cites)
+            parts = [text, "(Superseded)"]
+            if cite_str:
+                parts.append(cite_str)
+            parts.append(f"<!-- claim:{it['id']} -->")
+            lines.append("- " + " ".join(parts))
+        lines.append("")
+
+    # Footer
+    lines.append("---")
+    app_at = latest_version["approved_at"][:16].replace("T", " ")
+    now_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    lines.append(
+        f"Handover version {latest_version['n']}, approved by {latest_version['approved_by']}, {app_at}. "
+        f"Exported for {principal.name}, {now_at}."
+    )
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def log_export(case_id: int, user_id: int, route: str, fmt: str, version_n: int, conn=None):
+    """Log an export action to access_log with format and version."""
+    if conn is None:
+        conn = db.get_conn()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    items_json = json.dumps({"format": fmt, "version": version_n})
+    labels_seen_json = json.dumps([])
+    conn.execute(
+        "INSERT INTO access_log (at, user_id, case_id, route, action, items, labels_seen) "
+        "VALUES (?, ?, ?, ?, 'export', ?, ?)",
+        (now_iso, user_id, case_id, route, items_json, labels_seen_json)
+    )
     conn.commit()

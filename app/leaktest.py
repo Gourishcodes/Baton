@@ -64,6 +64,8 @@ VIEWS = [
     "/case/1/conflicts",
     "/case/1/timeline",
     "/case/1/handover",
+    "/case/1/handover.md",
+    "/case/1/handover/print",
     "/case/1/approvals",
     "/trust",
 ]
@@ -350,6 +352,76 @@ def run_leak_test(verbose: bool = True):
                         f"and {other_persona} ({other_nums})"
                     )
 
+        # 9. Approver export positive controls (ROUND3_SPEC 3.4)
+        _set_persona(client, "lead")
+        lead_md = client.get("/case/1/handover.md").text
+        lead_print = client.get("/case/1/handover/print").text
+        for canary in CANARIES:
+            if canary["text"] in lead_md:
+                positive_controls.append({
+                    "persona": "lead (.md export)",
+                    "canary": canary["text"],
+                    "present": True,
+                })
+            if canary["text"] in lead_print:
+                positive_controls.append({
+                    "persona": "lead (print export)",
+                    "canary": canary["text"],
+                    "present": True,
+                })
+
+        # 10. Equivalence test: for each persona, claim IDs in Markdown export equal claim IDs on handover page
+        equivalence_failures = []
+        for persona in personas:
+            _set_persona(client, persona)
+            ho_text = client.get("/case/1/handover").text
+            md_text = client.get("/case/1/handover.md").text
+
+            ho_claim_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', ho_text))
+            if not ho_claim_ids:
+                ho_claim_ids = set(int(x) for x in re.findall(r'data-claim-id="(\d+)"', ho_text))
+            md_claim_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', md_text))
+
+            if ho_claim_ids != md_claim_ids:
+                equivalence_failures.append(
+                    f"Claim IDs mismatch for {persona}: {len(ho_claim_ids)} on page vs {len(md_claim_ids)} in markdown"
+                )
+
+        # 11. Escaping test: claim containing <script> and [x](javascript:alert(1))
+        escaping_failures = []
+        xss_text = "Check <script>alert(1)</script> and [x](javascript:alert(1)) payload"
+        run = repo.get_latest_run(case_id)
+        run_id = run["id"] if run else 1
+        cur = conn.execute(
+            """INSERT INTO claims (case_id, run_id, type, text, basis, labels, flags, identity)
+               VALUES (?, ?, 'Decision', ?, 'sourced', '["team"]', '{}', 'xss_test:C1:026')""",
+            (case_id, run_id, xss_text)
+        )
+        xss_cid = cur.lastrowid
+        conn.execute("INSERT INTO claim_cites (claim_id, line_id, valid) VALUES (?, 'C1:026', 1)", (xss_cid,))
+        conn.execute(
+            "INSERT OR REPLACE INTO decisions (identity, case_id, decision, by, at, seeded) VALUES ('xss_test:C1:026', ?, 'approved', 'Divya Menon', ?, 1)",
+            (case_id, db.now_iso())
+        )
+        conn.commit()
+
+        _set_persona(client, "lead")
+        test_md = client.get("/case/1/handover.md").text
+        test_print = client.get("/case/1/handover/print").text
+
+        if "<script>" in test_md:
+            escaping_failures.append("Markdown export contains unescaped <script> tag")
+        if "[x](javascript:alert(1))" in test_md:
+            escaping_failures.append("Markdown export contains unescaped [x](javascript:alert(1)) link")
+        if "<script>" in test_print:
+            escaping_failures.append("Print export contains unescaped <script> tag")
+
+        # Cleanup test claim
+        conn.execute("DELETE FROM claim_cites WHERE claim_id = ?", (xss_cid,))
+        conn.execute("DELETE FROM claims WHERE id = ?", (xss_cid,))
+        conn.execute("DELETE FROM decisions WHERE identity = 'xss_test:C1:026' AND case_id = ?", (case_id,))
+        conn.commit()
+
         global _last_leak_results
         _last_leak_results = {
             "total_found": total_found,
@@ -359,6 +431,8 @@ def run_leak_test(verbose: bool = True):
             "label_failures": label_failures,
             "count_mismatches": count_mismatches,
             "positive_controls": positive_controls,
+            "equivalence_failures": equivalence_failures,
+            "escaping_failures": escaping_failures,
         }
         return _last_leak_results
 
@@ -433,6 +507,18 @@ def format_report(results: dict) -> str:
     for f in results["count_mismatches"]:
         lines.append(f"  - {f}")
 
+    # Equivalence checks
+    eq_failures = results.get("equivalence_failures", [])
+    lines.append(f"Equivalence checks: {len(eq_failures)} failures")
+    for f in eq_failures:
+        lines.append(f"  - {f}")
+
+    # Escaping checks
+    esc_failures = results.get("escaping_failures", [])
+    lines.append(f"Escaping checks: {len(esc_failures)} failures")
+    for f in esc_failures:
+        lines.append(f"  - {f}")
+
     # Positive controls
     pc = results.get("positive_controls", [])
     if pc:
@@ -453,4 +539,12 @@ def format_report(results: dict) -> str:
 if __name__ == "__main__":
     results = run_leak_test(verbose=True)
     print(format_report(results))
-    sys.exit(0 if results["total_found"] == 0 else 1)
+    failures = (
+        results["total_found"]
+        + len(results.get("stub_failures", []))
+        + len(results.get("label_failures", []))
+        + len(results.get("count_mismatches", []))
+        + len(results.get("equivalence_failures", []))
+        + len(results.get("escaping_failures", []))
+    )
+    sys.exit(0 if failures == 0 else 1)
