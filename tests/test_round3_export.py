@@ -161,14 +161,29 @@ def test_different_roles_get_different_files_and_successor_is_strict_subset():
 
     assert lead_md != succ_md
 
-    # Extract claims from Markdown using the claim comments
-    lead_claim_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', lead_md))
-    succ_claim_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', succ_md))
+    # Extract claims from Markdown using bullet lines
+    lead_bullets = set(l.strip() for l in lead_md.splitlines() if l.strip().startswith("- "))
+    succ_bullets = set(l.strip() for l in succ_md.splitlines() if l.strip().startswith("- "))
 
-    assert len(succ_claim_ids) > 0
-    assert len(lead_claim_ids) > len(succ_claim_ids)
-    assert succ_claim_ids.issubset(lead_claim_ids)
-    assert not lead_claim_ids.issubset(succ_claim_ids)
+    assert len(succ_bullets) > 0
+    assert len(lead_bullets) > len(succ_bullets)
+    assert succ_bullets.issubset(lead_bullets)
+    assert not lead_bullets.issubset(succ_bullets)
+
+
+def test_no_internal_ids_in_exports():
+    """No internal id (claim, gap, user or case) may appear in any export."""
+    _seed_case_1()
+    client = TestClient(main.app)
+    for p in ["lead", "successor", "finance_ops", "leaver"]:
+        login_as(client, p)
+        md = client.get("/case/1/handover.md").text
+        pr = client.get("/case/1/handover/print").text
+        for text, fmt in [(md, "markdown"), (pr, "print")]:
+            assert "<!-- claim:" not in text, f"Found claim comment in {p} {fmt}"
+            assert "data-claim-id" not in text, f"Found data-claim-id in {p} {fmt}"
+            assert "<!-- gap:" not in text, f"Found gap comment in {p} {fmt}"
+            assert not re.search(r'\b(claim_id|gap_id|user_id|case_id)\b', text), f"Found internal id key in {p} {fmt}"
 
 
 def test_no_export_contains_restricted_or_label_markup():
@@ -199,24 +214,96 @@ def test_no_export_contains_restricted_or_label_markup():
 
 
 def test_equivalence_claim_ids_markdown_equals_handover_page():
-    """For every account, claim IDs in Markdown export equal claim IDs on handover page."""
+    """For every account, ordered claim text plus citation ids of each section
+    between the handover page and the .md match, with no IDs needed."""
     _seed_case_1()
     client = TestClient(main.app)
+    from app.leaktest import _parse_html_sections, _parse_md_sections
+
+    canonical_sections = [
+        "Who owns what", "What is at risk", "What depends on what",
+        "What is open", "What to do first", "Decisions and why", "History"
+    ]
 
     for persona in ["lead", "leaver", "successor", "finance_ops"]:
         login_as(client, persona)
 
         ho_resp = client.get("/case/1/handover")
         assert ho_resp.status_code == 200
-        ho_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', ho_resp.text))
-        if not ho_ids:
-            ho_ids = set(int(x) for x in re.findall(r'data-claim-id="(\d+)"', ho_resp.text))
+        ho_secs = _parse_html_sections(ho_resp.text)
 
         md_resp = client.get("/case/1/handover.md")
         assert md_resp.status_code == 200
-        md_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', md_resp.text))
+        md_secs = _parse_md_sections(md_resp.text)
 
-        assert ho_ids == md_ids, f"Mismatch for {persona}: {len(ho_ids)} on page vs {len(md_ids)} in markdown"
+        for sec in canonical_sections:
+            assert ho_secs.get(sec, []) == md_secs.get(sec, []), (
+                f"Mismatch in section '{sec}' for {persona}:\nPage: {ho_secs.get(sec, [])}\nMD: {md_secs.get(sec, [])}"
+            )
+
+
+def test_demo_data_each_approved_claim_id_appears_exactly_once_per_export():
+    """On the demo data, each approved claim id appears exactly once across build_handover sections,
+    and superseded claims appear only under History, never in any other section."""
+    _seed_case_1()
+
+    for persona in ["lead", "successor"]:
+        p = demo_principal(persona, case_id=1)
+        data = build_handover(1, p)
+        sections = data["sections"]
+
+        all_cids = []
+        for sec_name, items in sections.items():
+            if sec_name == "open_gaps":
+                continue
+            for item in items:
+                cid = item.get("id")
+                if cid is not None:
+                    all_cids.append(cid)
+
+        # Assert no duplicates across sections
+        assert len(all_cids) == len(set(all_cids)), f"Duplicate claim IDs in {persona} handover: {all_cids}"
+
+        # Superseded claims (e.g. claim 2) must appear ONLY in history
+        history_cids = [item.get("id") for item in sections.get("history", [])]
+        non_history_cids = []
+        for sec_name, items in sections.items():
+            if sec_name not in ("history", "open_gaps"):
+                non_history_cids.extend([item.get("id") for item in items])
+
+        # Claim 2 is superseded
+        assert 2 in history_cids, f"Claim 2 missing from history for {persona}"
+        assert 2 not in non_history_cids, f"Claim 2 found in non-history sections for {persona}"
+
+
+def test_markdown_escaping_plain_parentheses_unaltered():
+    """Escape only characters that change Markdown meaning; do not escape plain parentheses."""
+    _seed_case_1()
+    client = TestClient(main.app)
+    login_as(client, "lead")
+
+    md_resp = client.get("/case/1/handover.md")
+    assert md_resp.status_code == 200
+    # Must NOT have escaped parentheses \(notify/ package\)
+    assert r"\(notify/ package\)" not in md_resp.text
+    assert "(notify/ package)" in md_resp.text
+
+
+def test_finance_ops_export_positive_controls():
+    """finance_ops exports contain the finance canaries that appear in approved claims."""
+    _seed_case_1()
+    client = TestClient(main.app)
+    login_as(client, "finance_ops")
+
+    md_resp = client.get("/case/1/handover.md")
+    assert md_resp.status_code == 200
+    print_resp = client.get("/case/1/handover/print")
+    assert print_resp.status_code == 200
+
+    approved_finance_canaries = ["₹3,18,400", "7.4 months", "₹24,750", "₹19,200"]
+    for canary in approved_finance_canaries:
+        assert canary in md_resp.text, f"Canary {canary} missing from finance_ops .md"
+        assert canary in print_resp.text, f"Canary {canary} missing from finance_ops print"
 
 
 def test_slug_generation_with_quotes_slashes_and_crlf():
@@ -350,10 +437,101 @@ def test_escaping_markdown_and_html():
     assert "<script>" not in resp_md.text
     assert "\\<script\\>" in resp_md.text or "&lt;script&gt;" in resp_md.text
     assert "[x](javascript:alert(1))" not in resp_md.text
-    assert r"\[x\]\(javascript:alert\(1\)\)" in resp_md.text
+    assert r"\[x\](javascript:alert(1))" in resp_md.text
 
     # 2. Print export
     resp_print = client.get("/case/1/handover/print")
     assert resp_print.status_code == 200
     assert "<script>" not in resp_print.text
     assert "&lt;script&gt;" in resp_print.text
+
+
+def test_claim_in_open_conflict_has_disagreement_note():
+    """For a claim in an open conflict, build_handover adds the note:
+    'Disagrees with the claim at <first cite of the other claim>. Not yet decided by the approver.'
+    using only line id, same on screen, .md and print page."""
+    _seed_case_1()
+    client = TestClient(main.app)
+    login_as(client, "lead")
+
+    # Find the conflicting decision claim (Decision:C1:032)
+    conn = db.get_conn()
+    c12 = conn.execute("SELECT id FROM claims WHERE identity = 'Decision:C1:032' AND case_id = 1").fetchone()
+    assert c12 is not None
+    cid = c12["id"]
+
+    resp = client.post(f"/case/1/claims/{cid}/decision", data={"action": "approve"})
+    assert resp.status_code == 200
+    resp_app = client.post("/case/1/approve-handover")
+    assert resp_app.status_code == 200
+
+    expected_note = "Disagrees with the claim at T1·013. Not yet decided by the approver."
+
+    for persona in ["lead", "successor"]:
+        login_as(client, persona)
+
+        # 1. Screen
+        page_resp = client.get("/case/1/handover")
+        assert page_resp.status_code == 200
+        assert expected_note in page_resp.text
+
+        # 2. Markdown
+        md_resp = client.get("/case/1/handover.md")
+        assert md_resp.status_code == 200
+        assert expected_note in md_resp.text
+        # Assert the line is in risks section
+        risks_md = md_resp.text.split("## What is at risk")[1].split("## ")[0]
+        assert expected_note in risks_md
+        assert "T1·013" in risks_md
+        # Assert other claim's text is not leaked
+        assert "Pilot launch (Saffron Lane Kitchen)" not in md_resp.text
+
+        # 3. Print page
+        pr_resp = client.get("/case/1/handover/print")
+        assert pr_resp.status_code == 200
+        assert expected_note in pr_resp.text
+
+
+def test_answered_gap_appears_in_successor_export_and_handover_page():
+    """Answer a gap as leaver, approve the attested claim and handover as approver,
+    assert answer text appears in successor .md and on handover page in section for its type."""
+    _seed_case_1()
+    client = TestClient(main.app)
+
+    # 1. Leaver answers gap 1 as an Owner claim
+    login_as(client, "leaver")
+    ans_text = "Tanvi Shetty will own on-call support during the initial pilot phase."
+    resp_ans = client.post("/case/1/gaps/1/answer", data={
+        "text": ans_text,
+        "type": "Owner",
+        "label": "team",
+    })
+    assert resp_ans.status_code == 200
+
+    # 2. Approver approves the claim and approves handover
+    conn = db.get_conn()
+    claim = conn.execute("SELECT id FROM claims WHERE basis = 'attested' AND case_id = 1 ORDER BY id DESC LIMIT 1").fetchone()
+    assert claim is not None
+    cid = claim["id"]
+
+    login_as(client, "lead")
+    resp_dec = client.post(f"/case/1/claims/{cid}/decision", data={"action": "approve"})
+    assert resp_dec.status_code == 200
+
+    resp_ho = client.post("/case/1/approve-handover")
+    assert resp_ho.status_code == 200
+
+    # 3. Successor sees answer in .md and handover page under 'Who owns what'
+    login_as(client, "successor")
+
+    resp_md = client.get("/case/1/handover.md")
+    assert resp_md.status_code == 200
+    assert ans_text in resp_md.text
+    sec_md = resp_md.text.split("## Who owns what")[1].split("## ")[0]
+    assert ans_text in sec_md
+
+    resp_page = client.get("/case/1/handover")
+    assert resp_page.status_code == 200
+    assert ans_text in resp_page.text
+    sec_page = resp_page.text.split("<h2>Who owns what</h2>")[1].split("<h2>")[0]
+    assert ans_text in sec_page

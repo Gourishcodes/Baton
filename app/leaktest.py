@@ -12,6 +12,7 @@ Implements docs/SPEC.md section 13:
 - Report a table (persona by view, count of forbidden canaries found) and the
   total. Report the count, never claim a guarantee.
 """
+import html
 import json
 import os
 import re
@@ -69,6 +70,60 @@ VIEWS = [
     "/case/1/approvals",
     "/trust",
 ]
+
+
+def _parse_html_sections(html_text: str) -> dict[str, list[dict]]:
+    sections = {}
+    sec_matches = list(re.finditer(r'<h[23][^>]*>(.*?)</h[23]>', html_text))
+    for i, m in enumerate(sec_matches):
+        sec_title = m.group(1).strip()
+        start = m.end()
+        end = sec_matches[i+1].start() if i+1 < len(sec_matches) else len(html_text)
+        sec_chunk = html_text[start:end]
+
+        items = []
+        p_matches = re.finditer(r'<p class="item item--(?:sourced|attested|inferred).*?>(.*?)</p>', sec_chunk, re.DOTALL)
+        for pm in p_matches:
+            content = pm.group(1)
+            cites = [c.replace(":", "·") for c in re.findall(r'<a class="cite"[^>]*>(.*?)</a>', content)]
+            clean = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+            clean = re.sub(r'<span[^>]*>.*?</span>', '', clean, flags=re.DOTALL)
+            clean = re.sub(r'<a[^>]*>.*?</a>', '', clean, flags=re.DOTALL)
+            clean = re.sub(r'<[^>]+>', '', clean)
+            clean = html.unescape(clean)
+            clean = " ".join(clean.split())
+            items.append({"text": clean, "cites": cites})
+        sections[sec_title] = items
+    return sections
+
+
+def _parse_md_sections(md_text: str) -> dict[str, list[dict]]:
+    sections = {}
+    sec_matches = list(re.finditer(r'^##[#]?\s+(.*?)$', md_text, re.MULTILINE))
+    for i, m in enumerate(sec_matches):
+        sec_title = m.group(1).strip()
+        start = m.end()
+        end = sec_matches[i+1].start() if i+1 < len(sec_matches) else len(md_text)
+        sec_chunk = md_text[start:end]
+
+        items = []
+        for line in sec_chunk.splitlines():
+            line = line.strip()
+            if not line.startswith("- "):
+                continue
+            line_content = line[2:].strip()
+            line_content = re.sub(r'<!--.*?-->', '', line_content).strip()
+            cites = [c.replace(":", "·") for c in re.findall(r'\b[A-Z]\d+[·:]\d+\b', line_content)]
+            for c in cites:
+                line_content = line_content.replace(c, "").strip()
+            line_content = re.sub(r'\[(Conflict|Sourced|Attested|Inferred)\]', '', line_content).strip()
+            line_content = re.sub(r'\(Due [^\)]+\)', '', line_content).strip()
+            line_content = re.sub(r'\(Superseded\)', '', line_content).strip()
+            line_content = re.sub(r'\\([`*_{}\[\]#<>|~])', r'\1', line_content).strip()
+            line_content = " ".join(line_content.split())
+            items.append({"text": line_content, "cites": cites})
+        sections[sec_title] = items
+    return sections
 
 
 def _set_persona(client, persona):
@@ -370,22 +425,43 @@ def run_leak_test(verbose: bool = True):
                     "present": True,
                 })
 
-        # 10. Equivalence test: for each persona, claim IDs in Markdown export equal claim IDs on handover page
+        # Positive controls for finance_ops exports (approved finance canaries)
+        _set_persona(client, "finance_ops")
+        finance_md = client.get("/case/1/handover.md").text
+        finance_print = client.get("/case/1/handover/print").text
+        approved_finance_canaries = ["₹3,18,400", "7.4 months", "₹24,750", "₹19,200"]
+        for c_text in approved_finance_canaries:
+            if c_text in finance_md:
+                positive_controls.append({
+                    "persona": "finance_ops (.md export)",
+                    "canary": c_text,
+                    "present": True,
+                })
+            if c_text in finance_print:
+                positive_controls.append({
+                    "persona": "finance_ops (print export)",
+                    "canary": c_text,
+                    "present": True,
+                })
+
+        # 10. Equivalence test: compare ordered claim text plus citation ids per section
         equivalence_failures = []
+        canonical_sections = ["Who owns what", "What is at risk", "What depends on what", "What is open", "What to do first", "Decisions and why", "History"]
         for persona in personas:
             _set_persona(client, persona)
             ho_text = client.get("/case/1/handover").text
             md_text = client.get("/case/1/handover.md").text
 
-            ho_claim_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', ho_text))
-            if not ho_claim_ids:
-                ho_claim_ids = set(int(x) for x in re.findall(r'data-claim-id="(\d+)"', ho_text))
-            md_claim_ids = set(int(x) for x in re.findall(r'<!-- claim:(\d+) -->', md_text))
+            ho_secs = _parse_html_sections(ho_text)
+            md_secs = _parse_md_sections(md_text)
 
-            if ho_claim_ids != md_claim_ids:
-                equivalence_failures.append(
-                    f"Claim IDs mismatch for {persona}: {len(ho_claim_ids)} on page vs {len(md_claim_ids)} in markdown"
-                )
+            for sec_name in canonical_sections:
+                h_items = ho_secs.get(sec_name, [])
+                m_items = md_secs.get(sec_name, [])
+                if h_items != m_items:
+                    equivalence_failures.append(
+                        f"Section '{sec_name}' mismatch for {persona}: {h_items} on page vs {m_items} in markdown"
+                    )
 
         # 11. Escaping test: claim containing <script> and [x](javascript:alert(1))
         escaping_failures = []

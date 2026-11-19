@@ -176,14 +176,28 @@ def create_version(case_id: int, approved_by: str, seeded: bool = False) -> int:
 
     new_n = latest_n + 1
 
-    # Snapshot: all approved/edited claims
-    claims = conn.execute(
-        """SELECT c.id, c.text, c.identity, d.decision
-           FROM claims c JOIN decisions d ON c.identity = d.identity AND c.case_id = d.case_id
-           WHERE c.case_id = ? AND d.decision IN ('approved', 'edited')
-           ORDER BY c.id""",
+    # Snapshot: all approved/edited claims for the latest run
+    run = conn.execute(
+        "SELECT id FROM runs WHERE case_id = ? AND status = 'done' ORDER BY id DESC LIMIT 1",
         (case_id,)
-    ).fetchall()
+    ).fetchone()
+    run_id = run["id"] if run else None
+    if run_id:
+        claims = conn.execute(
+            """SELECT c.id, c.text, c.identity, d.decision
+               FROM claims c JOIN decisions d ON c.identity = d.identity AND c.case_id = d.case_id
+               WHERE c.case_id = ? AND (c.run_id = ? OR c.basis = 'attested') AND d.decision IN ('approved', 'edited')
+               ORDER BY c.id""",
+            (case_id, run_id)
+        ).fetchall()
+    else:
+        claims = conn.execute(
+            """SELECT c.id, c.text, c.identity, d.decision
+               FROM claims c JOIN decisions d ON c.identity = d.identity AND c.case_id = d.case_id
+               WHERE c.case_id = ? AND d.decision IN ('approved', 'edited')
+               ORDER BY c.id""",
+            (case_id,)
+        ).fetchall()
 
     snapshot = [{"id": c["id"], "text": c["text"], "identity": c["identity"],
                  "decision": c["decision"]} for c in claims]

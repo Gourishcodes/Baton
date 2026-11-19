@@ -73,6 +73,11 @@ def get_claims(case_id: int, principal: Principal, type_filter: str = None,
     if run_id is not None:
         query += " AND run_id = ?"
         params.append(run_id)
+    else:
+        latest_run = get_latest_run(case_id)
+        if latest_run:
+            query += " AND (run_id = ? OR basis = 'attested')"
+            params.append(latest_run["id"])
 
     if type_filter:
         query += " AND type = ?"
@@ -493,6 +498,15 @@ def reset_demo_case(case_id: int = 1):
         (case_id,)
     )
     conn.execute("DELETE FROM claims WHERE case_id = ? AND basis = 'attested'", (case_id,))
+    if case_id == 1:
+        conn.execute("DELETE FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE case_id = 1 AND run_id > 1)")
+        conn.execute("DELETE FROM gap_cites WHERE gap_id IN (SELECT id FROM gaps WHERE case_id = 1 AND run_id > 1)")
+        conn.execute(
+            "DELETE FROM conflicts WHERE case_id = 1 AND (run_id > 1 OR claim_a IN (SELECT id FROM claims WHERE case_id = 1 AND run_id > 1) OR claim_b IN (SELECT id FROM claims WHERE case_id = 1 AND run_id > 1))"
+        )
+        conn.execute("DELETE FROM claims WHERE case_id = 1 AND run_id > 1")
+        conn.execute("DELETE FROM gaps WHERE case_id = 1 AND run_id > 1")
+        conn.execute("DELETE FROM runs WHERE case_id = 1 AND id > 1")
     conn.execute("UPDATE cases SET status = 'open' WHERE id = ?", (case_id,))
     conn.commit()
 
@@ -510,19 +524,74 @@ def build_handover(case_id: int, principal: Principal) -> dict:
     latest_version_obj = get_version(case_id, latest_v, principal) if latest_v > 0 else None
     ack = get_acknowledgement(case_id, latest_v) if latest_v > 0 else None
 
-    claims = get_claims(case_id, principal)
+    # Scope to latest run
+    run = get_latest_run(case_id)
+    run_id = run["id"] if run else None
+    claims = get_claims(case_id, principal, run_id=run_id)
     approved_claims = [c for c in claims if c.get("decision") and c["decision"].get("decision") in ("approved", "edited")]
     unanswered_gaps = [g for g in get_gaps(case_id, principal) if g.get("status") == "open"]
 
+    # For a claim in an open conflict, add note:
+    # "Disagrees with the claim at <first cite of the other claim>. Not yet decided by the approver."
+    conn = db.get_conn()
+    for c in approved_claims:
+        conflict_with = c.get("flags", {}).get("conflict_with")
+        if conflict_with and isinstance(conflict_with, list) and len(conflict_with) > 0 and c.get("visible", True):
+            other_cid = conflict_with[0]
+            other_claim = conn.execute(
+                "SELECT identity FROM claims WHERE id = ? AND case_id = ?",
+                (other_cid, case_id)
+            ).fetchone()
+            is_open = True
+            if other_claim and other_claim["identity"]:
+                other_dec = conn.execute(
+                    "SELECT decision FROM decisions WHERE identity = ? AND case_id = ?",
+                    (other_claim["identity"], case_id)
+                ).fetchone()
+                if other_dec and other_dec["decision"] == "rejected":
+                    is_open = False
+            if is_open:
+                other_cite = c.get("conflict_cite")
+                if not other_cite:
+                    other_cite_row = conn.execute(
+                        """SELECT cc.line_id FROM claim_cites cc
+                           JOIN claims cl ON cc.claim_id = cl.id
+                           WHERE cc.claim_id = ? AND cl.case_id = ?
+                           ORDER BY cc.rowid LIMIT 1""",
+                        (other_cid, case_id)
+                    ).fetchone()
+                    other_cite = other_cite_row["line_id"].replace(":", "·") if other_cite_row else ""
+
+                note = f"Disagrees with the claim at {other_cite}. Not yet decided by the approver."
+                if c.get("decision") and c["decision"].get("edited_text"):
+                    if note not in c["decision"]["edited_text"]:
+                        c["decision"]["edited_text"] = f"{c['decision']['edited_text'].rstrip()} {note}"
+                elif c.get("text"):
+                    if note not in c["text"]:
+                        c["text"] = f"{c['text'].rstrip()} {note}"
+
+    seen_ids = set()
+
+    def _dedup(items):
+        res = []
+        for it in items:
+            cid = it.get("id")
+            if cid is not None:
+                if cid in seen_ids:
+                    continue
+                seen_ids.add(cid)
+            res.append(it)
+        return res
+
     sections = {
-        "owners": [c for c in approved_claims if c.get("type") == "Owner"],
-        "risks": [c for c in approved_claims if c.get("type") == "Risk" or c.get("flags", {}).get("conflict_with")],
-        "dependencies": [c for c in approved_claims if c.get("type") == "Dependency"],
-        "open": [c for c in approved_claims if c.get("type") == "OpenQuestion"],
+        "owners": _dedup([c for c in approved_claims if not c.get("flags", {}).get("superseded_by") and c.get("type") == "Owner"]),
+        "risks": _dedup([c for c in approved_claims if not c.get("flags", {}).get("superseded_by") and (c.get("type") == "Risk" or c.get("flags", {}).get("conflict_with"))]),
+        "dependencies": _dedup([c for c in approved_claims if not c.get("flags", {}).get("superseded_by") and c.get("type") == "Dependency"]),
+        "open": _dedup([c for c in approved_claims if not c.get("flags", {}).get("superseded_by") and c.get("type") == "OpenQuestion"]),
         "open_gaps": unanswered_gaps,
-        "actions": sorted([c for c in approved_claims if c.get("type") == "NextAction"], key=lambda x: x.get("due") or "9999"),
-        "decisions": [c for c in approved_claims if c.get("type") == "Decision" and not c.get("flags", {}).get("superseded_by")],
-        "history": [c for c in approved_claims if c.get("flags", {}).get("superseded_by")],
+        "actions": _dedup(sorted([c for c in approved_claims if not c.get("flags", {}).get("superseded_by") and c.get("type") == "NextAction" and not c.get("flags", {}).get("conflict_with")], key=lambda x: x.get("due") or "9999")),
+        "decisions": _dedup([c for c in approved_claims if not c.get("flags", {}).get("superseded_by") and c.get("type") == "Decision" and not c.get("flags", {}).get("conflict_with")]),
+        "history": _dedup([c for c in approved_claims if c.get("flags", {}).get("superseded_by")]),
     }
 
     return {
@@ -543,10 +612,12 @@ def slugify(text: str) -> str:
 
 
 def escape_markdown(text: str) -> str:
-    """Escape Markdown control characters so claim text cannot inject formatting, links, or HTML."""
+    """Escape Markdown control characters so claim text cannot inject formatting, links, or HTML.
+    Plain parentheses are not escaped.
+    """
     if not text:
         return ""
-    chars_to_escape = r"\`*_{}[]()#<>|~"
+    chars_to_escape = r"\`*_{}[]#<>|~"
     res = []
     for ch in text:
         if ch in chars_to_escape:
@@ -571,7 +642,7 @@ def render_handover_markdown(handover_data: dict, principal: Principal) -> str:
         raise ValueError("Cannot render markdown for unapproved handover")
 
     lines = []
-    lines.append(f"# Handover Document &middot; {case['name']}")
+    lines.append(f"# Handover Document · {case['name']}")
     lines.append("")
 
     def _render_claim(item: dict) -> str:
@@ -599,7 +670,6 @@ def render_handover_markdown(handover_data: dict, principal: Principal) -> str:
             parts.extend(badges)
         if cite_str:
             parts.append(cite_str)
-        parts.append(f"<!-- claim:{item['id']} -->")
         return "- " + " ".join(parts)
 
     def _render_section(title: str, items: list[dict], extra_items: list[dict] = None):
@@ -650,7 +720,6 @@ def render_handover_markdown(handover_data: dict, principal: Principal) -> str:
             parts = [text, "(Superseded)"]
             if cite_str:
                 parts.append(cite_str)
-            parts.append(f"<!-- claim:{it['id']} -->")
             lines.append("- " + " ".join(parts))
         lines.append("")
 
