@@ -18,7 +18,7 @@
       Baton
     </a>
     {% if case %}
-    <div class="casename"><a href="/cases" style="color:var(--ink-2);text-decoration:none">Cases</a> &nbsp;&middot;&nbsp; <b>{{ case.name }}</b> &nbsp;{{ case.leaver }} to {{ case.successor }} &nbsp;&middot;&nbsp; {{ case.leaver.split()[0] if case.leaver else 'Meera' }} leaves in 14 days</div>
+    <div class="casename"><a href="/cases" style="color:var(--ink-2);text-decoration:none">Cases</a> &nbsp;&middot;&nbsp; <b>{{ case.name }}</b>{% if case.leaver and case.successor %} &nbsp;{{ case.leaver }} to {{ case.successor }}{% endif %}{% if case.id == 1 %} &nbsp;&middot;&nbsp; {{ case.leaver.split()[0] if case.leaver else 'Meera' }} leaves in 14 days{% endif %}</div>
     {% endif %}
     <div class="spacer"></div>
     {% if principal and principal.is_demo %}

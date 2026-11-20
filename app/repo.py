@@ -172,15 +172,30 @@ def get_claims(case_id: int, principal: Principal, type_filter: str = None,
             conflict_with = d["flags"].get("conflict_with")
             if conflict_with and isinstance(conflict_with, list) and len(conflict_with) > 0:
                 other_cid = conflict_with[0]
-                d["conflict_cite"] = first_cite_by_claim.get(other_cid, "")
+                other_row = conn.execute("SELECT labels FROM claims WHERE id = ? AND case_id = ?", (other_cid, case_id)).fetchone()
+                if other_row and access.visible(json.loads(other_row["labels"]), principal):
+                    d["conflict_cite"] = first_cite_by_claim.get(other_cid, "")
+                else:
+                    d["conflict_cite"] = None
+                    d["flags"]["conflict_with"] = []
 
             superseded_by = d["flags"].get("superseded_by")
             if superseded_by:
-                d["superseded_by_cite"] = first_cite_by_claim.get(superseded_by, "")
+                other_row = conn.execute("SELECT labels FROM claims WHERE id = ? AND case_id = ?", (superseded_by, case_id)).fetchone()
+                if other_row and access.visible(json.loads(other_row["labels"]), principal):
+                    d["superseded_by_cite"] = first_cite_by_claim.get(superseded_by, "")
+                else:
+                    d["superseded_by_cite"] = None
+                    d["flags"].pop("superseded_by", None)
 
             supersedes = d["flags"].get("supersedes")
             if supersedes:
-                d["supersedes_cite"] = first_cite_by_claim.get(supersedes, "")
+                other_row = conn.execute("SELECT labels FROM claims WHERE id = ? AND case_id = ?", (supersedes, case_id)).fetchone()
+                if other_row and access.visible(json.loads(other_row["labels"]), principal):
+                    d["supersedes_cite"] = first_cite_by_claim.get(supersedes, "")
+                else:
+                    d["supersedes_cite"] = None
+                    d["flags"].pop("supersedes", None)
 
             # Get cites
             cites = conn.execute(
@@ -263,36 +278,51 @@ def get_claim(case_id: int, claim_id: int, principal: Principal):
     conflict_with = d["flags"].get("conflict_with")
     if conflict_with and isinstance(conflict_with, list) and len(conflict_with) > 0:
         other_cid = conflict_with[0]
-        other_cite = conn.execute(
-            """SELECT cc.line_id FROM claim_cites cc
-               JOIN claims c ON cc.claim_id = c.id
-               WHERE cc.claim_id = ? AND c.case_id = ?
-               ORDER BY cc.rowid LIMIT 1""",
-            (other_cid, case_id)
-        ).fetchone()
-        d["conflict_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+        other_row = conn.execute("SELECT labels FROM claims WHERE id = ? AND case_id = ?", (other_cid, case_id)).fetchone()
+        if other_row and access.visible(json.loads(other_row["labels"]), principal):
+            other_cite = conn.execute(
+                """SELECT cc.line_id FROM claim_cites cc
+                   JOIN claims c ON cc.claim_id = c.id
+                   WHERE cc.claim_id = ? AND c.case_id = ?
+                   ORDER BY cc.rowid LIMIT 1""",
+                (other_cid, case_id)
+            ).fetchone()
+            d["conflict_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+        else:
+            d["conflict_cite"] = None
+            d["flags"]["conflict_with"] = []
 
     superseded_by = d["flags"].get("superseded_by")
     if superseded_by:
-        other_cite = conn.execute(
-            """SELECT cc.line_id FROM claim_cites cc
-               JOIN claims c ON cc.claim_id = c.id
-               WHERE cc.claim_id = ? AND c.case_id = ?
-               ORDER BY cc.rowid LIMIT 1""",
-            (superseded_by, case_id)
-        ).fetchone()
-        d["superseded_by_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+        other_row = conn.execute("SELECT labels FROM claims WHERE id = ? AND case_id = ?", (superseded_by, case_id)).fetchone()
+        if other_row and access.visible(json.loads(other_row["labels"]), principal):
+            other_cite = conn.execute(
+                """SELECT cc.line_id FROM claim_cites cc
+                   JOIN claims c ON cc.claim_id = c.id
+                   WHERE cc.claim_id = ? AND c.case_id = ?
+                   ORDER BY cc.rowid LIMIT 1""",
+                (superseded_by, case_id)
+            ).fetchone()
+            d["superseded_by_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+        else:
+            d["superseded_by_cite"] = None
+            d["flags"].pop("superseded_by", None)
 
     supersedes = d["flags"].get("supersedes")
     if supersedes:
-        other_cite = conn.execute(
-            """SELECT cc.line_id FROM claim_cites cc
-               JOIN claims c ON cc.claim_id = c.id
-               WHERE cc.claim_id = ? AND c.case_id = ?
-               ORDER BY cc.rowid LIMIT 1""",
-            (supersedes, case_id)
-        ).fetchone()
-        d["supersedes_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+        other_row = conn.execute("SELECT labels FROM claims WHERE id = ? AND case_id = ?", (supersedes, case_id)).fetchone()
+        if other_row and access.visible(json.loads(other_row["labels"]), principal):
+            other_cite = conn.execute(
+                """SELECT cc.line_id FROM claim_cites cc
+                   JOIN claims c ON cc.claim_id = c.id
+                   WHERE cc.claim_id = ? AND c.case_id = ?
+                   ORDER BY cc.rowid LIMIT 1""",
+                (supersedes, case_id)
+            ).fetchone()
+            d["supersedes_cite"] = other_cite["line_id"].replace(":", "·") if other_cite else ""
+        else:
+            d["supersedes_cite"] = None
+            d["flags"].pop("supersedes", None)
 
     return d
 

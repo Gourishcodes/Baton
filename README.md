@@ -50,10 +50,35 @@ All project sources and test fixtures are synthetic data written by the team wit
 
 Antigravity and Claude wrote most of the code across the application, verification engine, access rules, tests, and documentation, as detailed in [`AI_DISCLOSURE.md`](AI_DISCLOSURE.md). When configured for live extraction, a free-tier model runs inside the product and its provider may log inputs, so use only synthetic data.
 
-## Limits
+## Limits & Operational Disclosures
 
-- **Accounts & Persistence**: User accounts are open for sign-up (capped by `MAX_USERS`, default 200) without email verification or password reset. On free-tier cloud hosts with ephemeral storage, accounts and cases can vanish when the host restarts.
-- **Role switching**: The role selector switches demo accounts for evaluation purposes; demo accounts share a public password. Real accounts do not.
-- **Canary scanning**: Scanning response bodies for planted canary strings is a strong fail-closed check, not a mathematical proof of confidentiality.
-- **Metadata leakage**: Showing counts of hidden items reveals to lower clearances that confidential items exist.
-- **Sample size**: The evaluation suite uses a small synthetic sample written for this challenge, not an industry-wide benchmark.
+1. **Multi-tenant vs multi-user**: Baton is a multi-user application within a single database using case scoping (`case_id`) and label-based access clearance (`holds`), not a hard multi-tenant system with separate database instances or tenant-level encrypted storage.
+2. **Provider logging**: When configured for live extraction, requests are sent to external LLM providers (e.g. Gemini free tier), which may retain and log prompts and generated outputs for model improvement. Users must never upload confidential, proprietary, or personal data to live cases.
+3. **Network boundary**: External model calls are strictly isolated to `app/extract.py`. All other operations—including parsers, rule verification, access control evaluation, Markdown/Print export generation, and leak tests—run 100% offline with zero outbound network calls.
+4. **Single-file SQLite & ephemeral disk reset**: Application state and rate counters (`provider_calls`, `run_events`, `login_attempts`) are stored in a single SQLite database file (`baton.db`). On free hosting tiers with ephemeral containers/disks, container sleep/restarts reset the database and runtime cache, clearing non-demo user accounts, uploaded cases, and daily call counters.
+5. **Token-based invites**: Case sharing uses single-use, 7-day cryptographic invite tokens. Links must be shared securely over private communication channels. Redeeming an invite never degrades or strips an existing member's role or clearance, and a case always preserves at least one owner.
+6. **Planted-string scan covers demo case only**: The automated 9-canary scan and WireCheckMiddleware cover the seeded demo case (Case 1) only. On user-created cases, confidential information is protected exclusively by the access control filter (`access.visible`), which deterministically enforces label clearances.
+7. **Sign-up without email verification or password reset**: User account registration is open (bounded by `MAX_USERS`, default 100) without email confirmation or password-reset flows. Forgotten passwords require creating a new account.
+8. **Live accuracy for new cases is not measured**: Accuracy metrics (recall, precision, TR01-TR07 traps) are computed exclusively against the ground-truth answer key of the seeded demo case. No accuracy figure exists for newly uploaded cases; all extracted claims start Pending and are citation-checked by code.
+9. **"What to do first" can list overdue items and duplicate actions**: The prioritization view aggregates action items across all uploaded sources. Duplicate mentions across different files or items with past target dates may appear.
+10. **Demo clock**: The seeded demo case operates on a frozen reference clock (14 days before Meera Joshi's departure) for reproducible evaluation, whereas user-created cases use live UTC timestamps.
+11. **Role switching**: The role selector switch is exclusively available for the four seeded demo accounts. Real accounts see their identity, clearance tags, and Sign out.
+12. **Metadata leakage**: Showing counts of hidden items reveals to lower clearances that confidential items exist.
+13. **Sample size**: The evaluation suite uses a small synthetic sample written for this challenge, not an industry-wide benchmark.
+
+## Environment Variables
+
+Copy `.env.example` to `.env` to configure the application:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SECRET_KEY` | required | Secret key for signed session cookies and CSRF Origin validation |
+| `DEMO_PASSWORD` | `baton-demo-2026` | Password for seeded demo accounts |
+| `GEMINI_API_KEY` | `""` | Gemini API key for live LLM extraction |
+| `LIVE_ENABLED` | `1` | Kill-switch for live extraction (`1` = enabled, `0` = disabled) |
+| `LIVE_DAILY_CALL_CAP` | `50` | Maximum provider calls across all users per day |
+| `MAX_USERS` | `100` | Maximum registered non-demo user accounts |
+| `RUNS_PER_USER_PER_DAY` | `3` | Maximum live extraction runs per user account daily |
+| `RUNTIME_CACHE_DIR` | `./runtime_cache` | Directory caching live extraction results |
+| `BATON_DB` | `baton.db` | SQLite database file path |
+| `TRUSTED_PROXY_HOPS` | `1` | Reverse proxy hops for client IP extraction |

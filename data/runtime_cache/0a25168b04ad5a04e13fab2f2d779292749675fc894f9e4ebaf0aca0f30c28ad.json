@@ -1,0 +1,37 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Confidential staffing review HR_SECRET_fe0b9b2f",
+      "subject": "Service Migration",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c17s3:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Salary adjustments list",
+      "subject": "Service Migration",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c17s3:002"
+      ]
+    }
+  ],
+  "gaps": []
+}

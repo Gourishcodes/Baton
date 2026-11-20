@@ -1,0 +1,37 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "Vendor contract budget capped at 3 lakh FIN_SECRET_ff11d506",
+      "subject": "Service Migration",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c27s2:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Payment schedule Q3",
+      "subject": "Service Migration",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c27s2:002"
+      ]
+    }
+  ],
+  "gaps": []
+}

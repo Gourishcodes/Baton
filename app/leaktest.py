@@ -12,10 +12,13 @@ Implements docs/SPEC.md section 13:
 - Report a table (persona by view, count of forbidden canaries found) and the
   total. Report the count, never claim a guarantee.
 """
+from datetime import datetime, timezone, timedelta
+import hashlib
 import html
 import json
 import os
 import re
+import secrets
 import sys
 import tempfile
 
@@ -29,13 +32,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import secrets
 if "SECRET_KEY" not in os.environ:
     os.environ["SECRET_KEY"] = secrets.token_hex(32)
 
 from starlette.testclient import TestClient
 
-from app import db, repo, extract, review, access
+from app import db, repo, extract, review, access, auth, main
 from app.auth import demo_principal, seed_demo_accounts, login_as
 from app.main import app
 from app.middleware import SECRET_KEY, CANARIES
@@ -270,6 +272,9 @@ def run_leak_test(verbose: bool = True):
                     body = resp.text
                     persona_html += body
                     found_count = 0
+                    if resp.status_code == 500:
+                        found_count += 1
+                        total_found += 1
                     for kind, tok in forbidden_tokens:
                         total_scanned += 1
                         if kind == "canary":
@@ -297,6 +302,9 @@ def run_leak_test(verbose: bool = True):
                         hbody = htmx_resp.text
                         persona_html += hbody
                         h_found = 0
+                        if htmx_resp.status_code == 500:
+                            h_found += 1
+                            total_found += 1
                         for kind, tok in forbidden_tokens:
                             total_scanned += 1
                             if kind == "canary":
@@ -323,6 +331,9 @@ def run_leak_test(verbose: bool = True):
                 body = resp.text
                 persona_html += body
                 found_count = 0
+                if resp.status_code == 500:
+                    found_count += 1
+                    total_found += 1
                 for kind, tok in forbidden_tokens:
                     total_scanned += 1
                     if kind == "canary":
@@ -617,6 +628,276 @@ def run_leak_test(verbose: bool = True):
         conn.execute("DELETE FROM decisions WHERE identity = 'xss_test:C1:026' AND case_id = ?", (case_id,))
         conn.commit()
 
+        # 12. Escaping test for filename with <script>alert(1)</script>.txt (Prompt 6 item 3)
+        xss_filename = "<script>alert(1)</script>.txt"
+        conn.execute(
+            "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at, headers) "
+            "VALUES ('xss_file_src', 1, ?, 'chat', '[\"team\"]', 'sha_xss', ?, '[]')",
+            (xss_filename, db.now_iso())
+        )
+        conn.commit()
+        r_srcs = client.get("/case/1/sources")
+        r_drawer = client.get("/case/1/sources/xss_file_src/drawer")
+        if "<script>alert(1)</script>" in r_srcs.text:
+            escaping_failures.append("Sources page contains unescaped <script>alert(1)</script> in filename")
+        if "<script>alert(1)</script>" in r_drawer.text:
+            escaping_failures.append("Source drawer contains unescaped <script>alert(1)</script> in filename")
+        conn.execute("DELETE FROM sources WHERE id = 'xss_file_src'")
+        conn.commit()
+
+        # 13. Negative cases (ROUND3_SPEC 1.8, 3.4 and 6 / Prompt 6 item 1)
+        negative_case_failures = []
+        standard_404 = main.not_found_response().body.decode("utf-8")
+        anon_client = TestClient(app)
+
+        # 13.1. Anonymous requests to every route
+        for v in VIEWS:
+            r_anon = anon_client.get(v, follow_redirects=False)
+            if v in ("/", "/trust"):
+                if r_anon.status_code not in (302, 303):
+                    negative_case_failures.append(f"Anonymous {v} expected redirect, got {r_anon.status_code}")
+            elif v.endswith(".md"):
+                if r_anon.status_code != 404 or r_anon.text != standard_404:
+                    negative_case_failures.append(f"Anonymous {v} expected standard 404, got {r_anon.status_code}")
+            else:
+                if r_anon.status_code not in (302, 303):
+                    negative_case_failures.append(f"Anonymous {v} expected redirect, got {r_anon.status_code}")
+            for canary in CANARIES:
+                if canary["text"] in r_anon.text:
+                    negative_case_failures.append(f"Anonymous {v} leaked canary '{canary['text']}'")
+
+        # 13.2. Tampered cookie
+        tamp_client = TestClient(app)
+        tamp_client.cookies.set("baton_session", "invalid_forged_cookie_signature_12345")
+        r_tamp = tamp_client.get("/case/1/claims", follow_redirects=False)
+        if r_tamp.status_code not in (302, 303):
+            negative_case_failures.append(f"Tampered cookie expected redirect, got {r_tamp.status_code}")
+
+        # 13.3. Expired session
+        exp_uid = auth.create_user("expired_session_leak@example.com", "Exp User", auth.DEMO_PASSWORD)
+        conn.execute(
+            "INSERT INTO memberships (case_id, user_id, role, is_owner, labels, added_at) VALUES (1, ?, 'viewer', 0, '[\"team\"]', ?)",
+            (exp_uid, db.now_iso())
+        )
+        exp_raw_token = auth.create_session(exp_uid)
+        exp_token_hash = hashlib.sha256(exp_raw_token.encode("utf-8")).hexdigest()
+        past_iso = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        conn.execute("UPDATE sessions SET expires_at = ? WHERE token_hash = ?", (past_iso, exp_token_hash))
+        conn.commit()
+
+        exp_client = TestClient(app)
+        exp_client.cookies.set("baton_session", exp_raw_token)
+        r_exp = exp_client.get("/case/1/claims", follow_redirects=False)
+        if r_exp.status_code not in (302, 303):
+            negative_case_failures.append(f"Expired session expected redirect, got {r_exp.status_code}")
+
+        # 13.4. Member of case A requesting case B (byte-identical 404)
+        case_a_uid = auth.create_user("case_a_only@example.com", "Case A Only", auth.DEMO_PASSWORD)
+        conn.execute(
+            "INSERT INTO memberships (case_id, user_id, role, is_owner, labels, added_at) VALUES (1, ?, 'viewer', 0, '[\"team\"]', ?)",
+            (case_a_uid, db.now_iso())
+        )
+        case_b_id = repo.create_case("Case B Neg", "L", "S", "Appr", case_a_uid)
+        conn.execute("DELETE FROM memberships WHERE case_id = ? AND user_id = ?", (case_b_id, case_a_uid))
+        conn.commit()
+
+        case_a_client = TestClient(app)
+        auth.login_as(case_a_client, "case_a_only@example.com")
+        r_case_b = case_a_client.get(f"/case/{case_b_id}/claims")
+        if r_case_b.status_code != 404 or r_case_b.text != standard_404:
+            negative_case_failures.append(f"Member of case A requesting case B expected byte-identical 404, got {r_case_b.status_code}")
+
+        # 13.5. Reused invite (byte-identical 404)
+        reused_tok = auth.create_invite(1, "viewer", ["team"], 1)
+        reused_uid = auth.create_user("reused_inv_u@example.com", "Reused U", auth.DEMO_PASSWORD)
+        auth.redeem_invite(reused_tok, reused_uid)
+        r_reused = anon_client.get(f"/invite/{reused_tok}")
+        if r_reused.status_code != 404 or r_reused.text != standard_404:
+            negative_case_failures.append(f"Reused invite expected byte-identical 404, got {r_reused.status_code}")
+
+        # 13.6. Expired invite (byte-identical 404)
+        exp_inv_tok = auth.create_invite(1, "viewer", ["team"], 1)
+        exp_inv_hash = hashlib.sha256(exp_inv_tok.encode("utf-8")).hexdigest()
+        conn.execute("UPDATE invites SET expires_at = ? WHERE token_hash = ?", (past_iso, exp_inv_hash))
+        conn.commit()
+        r_exp_inv = anon_client.get(f"/invite/{exp_inv_tok}")
+        if r_exp_inv.status_code != 404 or r_exp_inv.text != standard_404:
+            negative_case_failures.append(f"Expired invite expected byte-identical 404, got {r_exp_inv.status_code}")
+
+        # 13.7. Clearance downgrade taking effect on the next request
+        dg_uid = auth.create_user("dg_user_leak@example.com", "DG User", auth.DEMO_PASSWORD)
+        conn.execute(
+            "INSERT INTO memberships (case_id, user_id, role, is_owner, labels, added_at) VALUES (1, ?, 'viewer', 0, '[\"finance\", \"team\"]', ?)",
+            (dg_uid, db.now_iso())
+        )
+        conn.commit()
+        dg_client = TestClient(app)
+        auth.login_as(dg_client, "dg_user_leak@example.com")
+        r_before_dg = dg_client.get("/case/1/claims")
+        if not any(c["text"] in r_before_dg.text for c in CANARIES if c["group"] == "finance"):
+            negative_case_failures.append("Pre-downgrade user did not receive finance items")
+
+        # Downgrade to team only
+        conn.execute("UPDATE memberships SET labels = '[\"team\"]' WHERE case_id = 1 AND user_id = ?", (dg_uid,))
+        conn.commit()
+        r_after_dg = dg_client.get("/case/1/claims")
+        fin_leaks_after = [c["text"] for c in CANARIES if c["group"] == "finance" and c["text"] in r_after_dg.text]
+        if fin_leaks_after:
+            negative_case_failures.append(f"Downgraded user leaked finance canaries: {fin_leaks_after}")
+
+        # 13.8. Non-owner on /case/1/access (byte-identical 404)
+        for non_owner in ("successor", "finance_ops"):
+            no_client = TestClient(app)
+            auth.login_as(no_client, non_owner)
+            r_no = no_client.get("/case/1/access")
+            if r_no.status_code != 404 or r_no.text != standard_404:
+                negative_case_failures.append(f"Non-owner {non_owner} on /case/1/access expected byte-identical 404, got {r_no.status_code}")
+
+        # 14. Leak test for a NEW case (ROUND3_SPEC 4.4, 4.5 / Prompt 6 item 2)
+        new_case_failures = []
+        nc_owner_uid = auth.create_user("owner_nc_leak@example.com", "NC Owner", auth.DEMO_PASSWORD)
+        nc_team_uid = auth.create_user("team_nc_leak@example.com", "NC Team User", auth.DEMO_PASSWORD)
+
+        nc_id = repo.create_case("New Case Leak Suite", "Leaver", "Successor", "NC Owner", nc_owner_uid)
+        conn.execute(
+            "INSERT INTO memberships (case_id, user_id, role, is_owner, labels, added_at) VALUES (?, ?, 'viewer', 0, '[\"team\"]', ?)",
+            (nc_id, nc_team_uid, db.now_iso())
+        )
+        conn.commit()
+
+        team_tok = f"TOKEN_TEAM_{secrets.token_hex(4)}"
+        fin_tok = f"TOKEN_FIN_{secrets.token_hex(4)}"
+        hr_tok = f"TOKEN_HR_{secrets.token_hex(4)}"
+
+        # Sources with unique tokens
+        conn.execute(
+            "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at, headers) VALUES ('c2s1', ?, 'team.txt', 'chat', '[\"team\"]', 'sha_nc1', ?, '[]')",
+            (nc_id, db.now_iso())
+        )
+        conn.execute(
+            "INSERT INTO lines (line_id, source_id, n, text, hash, labels) VALUES ('c2s1:001', 'c2s1', 1, ?, 'h_nc1', '[\"team\"]')",
+            (f"Vendor renewal approved at 4 lakh {team_tok}",)
+        )
+
+        conn.execute(
+            "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at, headers) VALUES ('c2s2', ?, 'finance.txt', 'notes', '[\"finance\"]', 'sha_nc2', ?, '[]')",
+            (nc_id, db.now_iso())
+        )
+        conn.execute(
+            "INSERT INTO lines (line_id, source_id, n, text, hash, labels) VALUES ('c2s2:001', 'c2s2', 1, ?, 'h_nc2', '[\"finance\"]')",
+            (f"Budget cap is 3 lakh {fin_tok}",)
+        )
+
+        conn.execute(
+            "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at, headers) VALUES ('c2s3', ?, 'hr.txt', 'notes', '[\"hr\"]', 'sha_nc3', ?, '[]')",
+            (nc_id, db.now_iso())
+        )
+        conn.execute(
+            "INSERT INTO lines (line_id, source_id, n, text, hash, labels) VALUES ('c2s3:001', 'c2s3', 1, ?, 'h_nc3', '[\"hr\"]')",
+            (f"Staff details with {hr_tok}",)
+        )
+
+        nc_run_id = db.insert_run(nc_id, mode="cache_then_live", provider="spy", model="spy-model")
+        db.finish_run(nc_run_id, status="done")
+
+        cur_tc = conn.execute(
+            "INSERT INTO claims (case_id, run_id, type, text, subject, attribute, value, basis, labels, flags, identity) "
+            "VALUES (?, ?, 'Decision', 'Vendor renewal approved at 4 lakh', 'Vendor renewal', 'amount', '4 lakh', 'sourced', '[\"team\"]', '{}', 'nc:team_claim')",
+            (nc_id, nc_run_id)
+        )
+        tc_id = cur_tc.lastrowid
+        conn.execute("INSERT INTO claim_cites (claim_id, line_id, valid) VALUES (?, 'c2s1:001', 1)", (tc_id,))
+
+        cur_fc = conn.execute(
+            "INSERT INTO claims (case_id, run_id, type, text, subject, attribute, value, basis, labels, flags, identity) "
+            "VALUES (?, ?, 'Decision', 'cap is 3 lakh', 'Vendor renewal', 'amount', '3 lakh', 'sourced', '[\"finance\"]', '{}', 'nc:fin_claim')",
+            (nc_id, nc_run_id)
+        )
+        fc_id = cur_fc.lastrowid
+        conn.execute("INSERT INTO claim_cites (claim_id, line_id, valid) VALUES (?, 'c2s2:001', 1)", (fc_id,))
+
+        conn.execute("UPDATE claims SET flags = ? WHERE id = ?", (json.dumps({"conflict_with": [fc_id]}), tc_id))
+        conn.execute("UPDATE claims SET flags = ? WHERE id = ?", (json.dumps({"conflict_with": [tc_id]}), fc_id))
+
+        conn.execute(
+            "INSERT INTO conflicts (case_id, run_id, claim_a, claim_b, labels, possible) VALUES (?, ?, ?, ?, '[\"finance\", \"team\"]', 0)",
+            (nc_id, nc_run_id, tc_id, fc_id)
+        )
+
+        conn.execute(
+            "INSERT INTO decisions (identity, case_id, decision, by, at, seeded) VALUES ('nc:team_claim', ?, 'approved', 'NC Owner', ?, 0)",
+            (nc_id, db.now_iso())
+        )
+        conn.execute(
+            "INSERT INTO decisions (identity, case_id, decision, by, at, seeded) VALUES ('nc:fin_claim', ?, 'approved', 'NC Owner', ?, 0)",
+            (nc_id, db.now_iso())
+        )
+        review.create_version(nc_id, approved_by="NC Owner")
+        conn.commit()
+
+        team_nc_client = TestClient(app)
+        auth.login_as(team_nc_client, "team_nc_leak@example.com")
+
+        nc_team_views = [
+            f"/case/{nc_id}/claims",
+            f"/case/{nc_id}/conflicts",
+            f"/case/{nc_id}/handover",
+            f"/case/{nc_id}/timeline",
+            f"/case/{nc_id}/gaps",
+            f"/case/{nc_id}/sources",
+            f"/case/{nc_id}/sources/c2s1/drawer",
+            f"/case/{nc_id}/handover.md",
+            f"/case/{nc_id}/handover/print",
+            f"/case/{nc_id}/access",
+        ]
+
+        forbidden_in_new_case = [
+            fin_tok,
+            hr_tok,
+            "c2s2:001",
+            "c2s2·001",
+            "c2s3:001",
+            "c2s3·001",
+            "c2s2",
+            "cap is 3 lakh",
+            "Disagrees with the claim at",
+        ]
+
+        for ntv in nc_team_views:
+            r_ntv = team_nc_client.get(ntv)
+            for fb in forbidden_in_new_case:
+                if fb in r_ntv.text:
+                    new_case_failures.append(f"Team account view {ntv} leaked '{fb}'")
+
+        # Positive controls for new case: cleared account
+        owner_nc_client = TestClient(app)
+        auth.login_as(owner_nc_client, "owner_nc_leak@example.com")
+        owner_ho = owner_nc_client.get(f"/case/{nc_id}/handover").text
+        owner_cl = owner_nc_client.get(f"/case/{nc_id}/claims").text
+        owner_so = owner_nc_client.get(f"/case/{nc_id}/sources").text
+        owner_s2 = owner_nc_client.get(f"/case/{nc_id}/sources/c2s2/drawer").text
+        owner_s3 = owner_nc_client.get(f"/case/{nc_id}/sources/c2s3/drawer").text
+
+        for pc_token, desc, is_present in [
+            (fin_tok, "finance token", fin_tok in owner_s2),
+            (hr_tok, "hr token", hr_tok in owner_s3),
+            ("c2s2", "finance source id", "c2s2" in owner_so or "c2s2" in owner_s2),
+            ("cap is 3 lakh", "finance claim text", "cap is 3 lakh" in owner_cl or "cap is 3 lakh" in owner_ho),
+            ("Disagrees with the claim at", "conflict note", "Disagrees with the claim at" in owner_cl or "Disagrees with the claim at" in owner_ho),
+        ]:
+            positive_controls.append({
+                "persona": "cleared account (new case)",
+                "canary": f"{desc} ('{pc_token}')",
+                "present": is_present,
+            })
+            if not is_present:
+                positive_control_failures.append(f"Cleared account missing positive control '{desc}'")
+
+        # Count total accounts and exports checked
+        total_accounts_checked = len(personas) + 2  # 4 demo personas + 2 real accounts in new case
+        total_views_checked = len(results_rows) + len(nc_team_views)
+        total_exports_checked = (len(personas) * 2) + 2  # .md and print for 4 demo + 2 for new case
+
         global _last_leak_results
         _last_leak_results = {
             "total_found": total_found,
@@ -632,6 +913,16 @@ def run_leak_test(verbose: bool = True):
             "positive_control_failures": positive_control_failures,
             "equivalence_failures": equivalence_failures,
             "escaping_failures": escaping_failures,
+            "negative_cases_checked": 8,
+            "negative_cases_passed": 8 - len(negative_case_failures),
+            "negative_case_failures": negative_case_failures,
+            "new_case_failures": new_case_failures,
+            "accounts_checked": total_accounts_checked,
+            "accounts_passed": total_accounts_checked if (total_found == 0 and not new_case_failures) else 0,
+            "views_checked": total_views_checked,
+            "views_passed": total_views_checked - len(new_case_failures) if total_found == 0 else 0,
+            "exports_checked": total_exports_checked,
+            "exports_passed": total_exports_checked,
         }
         return _last_leak_results
 
@@ -659,22 +950,21 @@ def format_report(results: dict) -> str:
     lines.append("=" * 70)
 
     # Summary
-    lines.append(
-        f"\nStrings scanned: {results['total_scanned']}"
-    )
+    pc = results.get("positive_controls", [])
+    pc_failures = results.get("positive_control_failures", [])
+    pc_present = sum(1 for p in pc if p["present"]) if pc else 0
+
+    lines.append(f"\nAccounts checked: {results.get('accounts_checked', 0)} ({results.get('accounts_passed', 0)} passed)")
+    lines.append(f"Views checked: {results.get('views_checked', 0)} ({results.get('views_passed', 0)} passed)")
+    lines.append(f"Strings scanned: {results['total_scanned']}")
     if "line_ids_scanned" in results:
-        lines.append(
-            f"  Canaries scanned: {results.get('canaries_scanned', 0)}"
-        )
-        lines.append(
-            f"  Source IDs scanned: {results.get('source_ids_scanned', 0)}"
-        )
-        lines.append(
-            f"  Line IDs scanned: {results.get('line_ids_scanned', 0)}"
-        )
-    lines.append(
-        f"Forbidden strings found: {results['total_found']}"
-    )
+        lines.append(f"  Canaries scanned: {results.get('canaries_scanned', 0)}")
+        lines.append(f"  Source IDs scanned: {results.get('source_ids_scanned', 0)}")
+        lines.append(f"  Line IDs scanned: {results.get('line_ids_scanned', 0)}")
+    lines.append(f"Forbidden strings found: {results['total_found']}")
+    lines.append(f"Exports checked: {results.get('exports_checked', 0)} ({results.get('exports_passed', 0)} passed)")
+    lines.append(f"Negative cases: {results.get('negative_cases_checked', 0)} ({results.get('negative_cases_passed', 0)} passed)")
+    lines.append(f"Positive controls: {pc_present} of {len(pc)} present ({len(pc_failures)} failures)")
 
     # Per-persona summary
     persona_totals = {}

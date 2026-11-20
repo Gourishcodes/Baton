@@ -111,42 +111,64 @@ class TestLeakTest:
             with open(template_path, "w", encoding="utf-8") as f:
                 f.write(original)
 
-    def test_leak_test_catches_planted_line_id_in_successor_export(self):
-        """Temporarily put 'F1·005' into the successor's export builder
-        and assert the leak test catches it, then remove it."""
-        orig_build_handover = repo.build_handover
+    def test_leak_test_catches_canary_in_template_and_markdown_builder(self):
+        """Prompt 6 item 1: Plant a canary in a template and in the Markdown builder,
+        assert the leak test catches both, then remove them."""
+        template_canary = "PW-CONTRACT-7731"
+        md_canary = "₹3,18,400"
 
-        def patched_build_handover(case_id, principal):
-            res = orig_build_handover(case_id, principal)
-            if principal and principal.role == "successor" and "sections" in res:
-                # Temporarily plant F1·005 into successor's export builder
-                for sec_key in ("actions", "owners", "decisions"):
-                    if sec_key in res["sections"] and res["sections"][sec_key]:
-                        item = res["sections"][sec_key][0]
-                        item["cites"] = list(item.get("cites", [])) + [{"line_id": "F1·005"}]
-                        break
-            return res
+        template_path = os.path.join(ROOT, "templates", "home.html")
+        with open(template_path, "r", encoding="utf-8") as f:
+            orig_template = f.read()
 
-        repo.build_handover = patched_build_handover
+        orig_render_md = repo.render_handover_markdown
+
         try:
-            results = run_leak_test(verbose=False)
-            assert results["total_found"] > 0, (
-                "Leak test did not catch planted line ID F1·005"
+            # 1. Plant canary in template
+            injected_template = orig_template.replace(
+                "{% block content %}",
+                "{% block content %}\n<!-- " + template_canary + " -->\n"
             )
-            succ_export_findings = [
-                r for r in results["rows"]
-                if r["persona"] == "successor" and "handover" in r["view"] and r["found"] > 0
-            ]
-            assert len(succ_export_findings) > 0, (
-                f"Expected leak findings in successor handover exports, got: {succ_export_findings}"
-            )
-        finally:
-            repo.build_handover = orig_build_handover
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write(injected_template)
 
-        # After removing it, leak test must pass with zero findings
+            # 2. Plant canary in Markdown builder
+            def patched_render_md(handover_data, principal):
+                out = orig_render_md(handover_data, principal)
+                if principal and principal.role == "successor":
+                    out += f"\n\nLeaked: {md_canary}\n"
+                return out
+
+            repo.render_handover_markdown = patched_render_md
+
+            # 3. Run leak test and assert BOTH leaks are caught
+            results = run_leak_test(verbose=False)
+            assert results["total_found"] > 0, "Leak test did not catch planted canaries"
+
+            template_caught = any(
+                (r["found"] > 0 or r["status_code"] == 500)
+                for r in results["rows"]
+                if r["persona"] in ("leaver", "successor") and r["view"] == "/"
+            )
+            assert template_caught, f"Template canary '{template_canary}' was not caught"
+
+            md_caught = any(
+                r["found"] > 0
+                for r in results["rows"]
+                if r["persona"] == "successor" and r["view"] == "/case/1/handover.md"
+            )
+            assert md_caught, f"Markdown builder canary '{md_canary}' was not caught"
+
+        finally:
+            # 4. Restore both
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write(orig_template)
+            repo.render_handover_markdown = orig_render_md
+
+        # 5. Assert leak test passes cleanly after removal
         clean_results = run_leak_test(verbose=False)
         assert clean_results["total_found"] == 0, (
-            f"Expected zero findings after removing planted line ID, got {clean_results['total_found']}"
+            f"Expected 0 leaks after removing planted canaries, got {clean_results['total_found']}"
         )
 
     def test_positive_controls(self):

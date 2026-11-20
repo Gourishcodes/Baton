@@ -1,0 +1,37 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "All services migrated to primary cluster",
+      "subject": "Service Migration",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c23s1:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Monitoring dashboards active",
+      "subject": "Service Migration",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c23s1:002"
+      ]
+    }
+  ],
+  "gaps": []
+}

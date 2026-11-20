@@ -8,6 +8,7 @@ Cache management with sha256 keys in demo_cache/.
 import hashlib
 import json
 import os
+import re
 from typing import Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -157,12 +158,48 @@ CUSTOM_PRIMARY_PROVIDER: Provider | None = None
 CUSTOM_FALLBACK_PROVIDER: Provider | None = None
 
 
+class SpyProvider(Provider):
+    """Spy provider for testing and offline runs without network."""
+
+    def __init__(self, canned_response=None, side_effect=None):
+        self.calls: list[dict] = []
+        self.call_count = 0
+        self.canned_response = canned_response
+        self.side_effect = side_effect
+
+    def generate_json(self, system: str, user: str, schema: dict) -> dict:
+        self.call_count += 1
+        self.calls.append({"system": system, "user": user, "schema": schema})
+        if self.side_effect:
+            if callable(self.side_effect):
+                return self.side_effect(system, user, schema)
+            raise self.side_effect
+        if self.canned_response:
+            return self.canned_response
+        # Extract synthetic claims from user lines for tests
+        lines = re.findall(r'\[([^\]]+)\]\s+([^\n]+)', user)
+        claims = []
+        for lid, txt in lines:
+            claims.append({
+                "type": "Decision",
+                "text": txt.strip()[:200],
+                "subject": "Service Migration",
+                "attribute": "none",
+                "value": None,
+                "cites": [lid],
+                "basis": "sourced",
+            })
+        return {"claims": claims, "gaps": []}
+
+
 def get_providers() -> tuple[Provider | None, Provider | None]:
     """Instantiate primary and fallback providers based on environment."""
     if CUSTOM_PRIMARY_PROVIDER is not None or CUSTOM_FALLBACK_PROVIDER is not None:
         return CUSTOM_PRIMARY_PROVIDER, CUSTOM_FALLBACK_PROVIDER
 
     provider_name = os.environ.get("LLM_PROVIDER", "gemini").lower()
+    if provider_name == "spy":
+        return SpyProvider(), None
 
     primary: Provider | None = None
     fallback: Provider | None = None

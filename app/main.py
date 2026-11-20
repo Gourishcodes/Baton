@@ -1351,7 +1351,7 @@ def run_case_extraction(
                 "res": res,
             }
         except Exception as e:
-            logging.exception(f"Extraction failed for case {case_id}: {e}")
+            logging.exception(f"Extraction failed for case {case_id}: {type(e).__name__}")
             msg = limits.map_exception_to_message(e)
             EXTRACTION_STATUS[case_id] = {
                 "status": "failed",
@@ -1774,6 +1774,7 @@ def handover_view(
     if not handover_data:
         return not_found_response()
 
+    error = request.query_params.get("error")
     return templates.TemplateResponse(
         request=request,
         name="handover.html",
@@ -1787,6 +1788,7 @@ def handover_view(
             "acknowledgement": handover_data["acknowledgement"],
             "sections": handover_data["sections"],
             "active_tab": "handover",
+            "error": error,
         }
     )
 
@@ -1871,6 +1873,50 @@ def approve_handover(
     """Approve handover (Approver only). Creates version n+1."""
     if principal.role != "approver":
         raise HTTPException(status_code=403, detail="Only approver may approve handover")
+
+    conn = db.get_conn()
+    run = conn.execute(
+        "SELECT id FROM runs WHERE case_id = ? AND status = 'done' ORDER BY id DESC LIMIT 1",
+        (case_id,)
+    ).fetchone()
+    run_id = run["id"] if run else None
+    if run_id:
+        approved_count = conn.execute(
+            """SELECT COUNT(*) as c
+               FROM claims c JOIN decisions d ON c.identity = d.identity AND c.case_id = d.case_id
+               WHERE c.case_id = ? AND (c.run_id = ? OR c.basis = 'attested') AND d.decision IN ('approved', 'edited')""",
+            (case_id, run_id)
+        ).fetchone()["c"]
+    else:
+        approved_count = conn.execute(
+            """SELECT COUNT(*) as c
+               FROM claims c JOIN decisions d ON c.identity = d.identity AND c.case_id = d.case_id
+               WHERE c.case_id = ? AND d.decision IN ('approved', 'edited')""",
+            (case_id,)
+        ).fetchone()["c"]
+
+    if approved_count == 0:
+        counts = get_nav_counts(case_id, principal)
+        case = repo.get_case(case_id, principal)
+        handover_data = repo.build_handover(case_id, principal)
+        return templates.TemplateResponse(
+            request=request,
+            name="handover.html",
+            context={
+                "request": request,
+                "role": principal.role,
+                "principal": principal,
+                "case": case,
+                "counts": counts,
+                "latest_version": handover_data.get("latest_version") if handover_data else None,
+                "acknowledgement": handover_data.get("acknowledgement") if handover_data else None,
+                "sections": handover_data.get("sections") if handover_data else {},
+                "active_tab": "handover",
+                "error": "No claims are approved yet. Approve claims first, then approve the handover.",
+            },
+            status_code=200,
+        )
+
     review.create_version(case_id, approved_by=principal.name)
     return RedirectResponse(url=f"/case/{case_id}/handover", status_code=status.HTTP_303_SEE_OTHER)
 

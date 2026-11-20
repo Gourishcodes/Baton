@@ -1,11 +1,15 @@
-# Known Issues
+# Known Issues & Operational Disclosures
 
-- Live Slack and GitHub webhooks do not ingest continuously; sources must be uploaded as text, CSV, or Markdown files.
-- Vector database search and conversational chatbot interfaces are not implemented; retrieval is deterministic and structured.
-- User accounts, passwords, and SSO are not implemented; role switching uses signed browser session cookies.
-- Live model extraction fails when API credentials are absent; the application relies on the committed cache in `cache_only` mode.
-- Evaluation trap TR01 (superseded decision) and TR03 (cross-label conflict) fail against the committed synthetic cache.
-- Export to PDF, Word documents, or email is not implemented; handovers are viewed and acknowledged directly in the web UI.
-- Dark mode is not implemented; only the light warm-paper palette is styled.
-- Viewports narrower than 640px stack the source drawer over content rather than displaying side-by-side.
-- The free hosted demo takes about a minute on cold start after idle, and all visitors share a single demo case (click 'Reset demo' if closed).
+1. **Multi-tenant vs multi-user**: Baton is designed as a multi-user application within a single database using case scoping (`case_id`) and label-based access clearance (`holds`), not a hard multi-tenant system with separate database instances or encrypted tenant-level filesystem isolation.
+2. **Provider logging**: When configured for live extraction, requests are sent to external LLM providers (e.g., Google Gemini free tier), which may retain and log prompts and generated outputs for model improvement. Users must never upload confidential, proprietary, or personal data to live cases.
+3. **Network boundary**: External model calls are strictly isolated to `app/extract.py`. All other operations—including parsers, rule verification, access control evaluation, Markdown/Print export generation, and leak tests—run 100% offline with zero outbound network calls.
+4. **Single-file SQLite & ephemeral disk reset**: Application state and rate counters (`provider_calls`, `run_events`, `login_attempts`) are stored in a single SQLite database file (`baton.db`). On free ephemeral hosting tiers, container sleep/restarts reset the database and runtime cache, clearing non-demo user accounts, uploaded cases, and daily call counters.
+5. **Token-based invites**: Case sharing uses single-use, 7-day cryptographic invite tokens. Links must be shared securely over private communication channels. Redeeming an invite never degrades or strips an existing member's role or clearance, and a case always preserves at least one owner.
+6. **Planted-string demo vs access function**: The automated 9-canary planted string scan and WireCheckMiddleware cover the seeded demo case (Case 1) only. On user-created cases, restricted text is protected exclusively by the core access control function (`access.visible`), which deterministically filters by clearance labels; string-scanning is not applied to arbitrary user text.
+7. **Live accuracy for new cases is not measured**: Accuracy metrics (recall, precision, TR01-TR07 traps) are evaluated exclusively against the known answer key of the seeded demo case. No accuracy benchmark exists for user-uploaded cases; every extracted claim on new cases starts Pending and is citation-checked by deterministic code.
+8. **"What to do first" can list overdue items and duplicate actions across sources**: The "What to do first" section aggregates high-priority next actions and open items from all sources. If multiple sources reference the same action or an item has a past deadline, it may list overdue items or duplicate actions across distinct files.
+9. **Demo clock**: The seeded demo case uses a fixed reference clock (14 days before Meera Joshi's departure) for demo consistency, while live cases use the current UTC system timestamp.
+10. **Live Slack and GitHub webhooks**: Live webhooks do not ingest continuously; sources must be uploaded as text (.txt), CSV (.csv), or Markdown (.md) files.
+11. **No vector DB / conversational chatbot**: Vector database search and conversational chatbot interfaces are deliberately not implemented; retrieval and verification are deterministic, citation-backed, and structured.
+12. **Dark mode**: Dark mode is not implemented; only the light warm-paper palette is styled.
+13. **Viewports narrower than 640px**: Viewports narrower than 640px stack the source drawer over content rather than displaying side-by-side.

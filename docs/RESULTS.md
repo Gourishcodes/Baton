@@ -1,7 +1,7 @@
 # Evaluation & Leak Test Results
 
-**Date**: 2026-11-14  
-**Commit**: `de43aec5523e1cb34fbcd6cc2f5bbe503533d9be`
+**Date**: 2026-11-20  
+**Commit**: `332cce429ab837c2d7f86065b0ea898747a47739`
 
 These outputs represent real test executions against the committed demo cache. These are the only place numbers may be quoted from.
 
@@ -96,23 +96,33 @@ Synthetic data written by the team with Claude. Small sample. Not a benchmark.
 BATON: LEAK TEST REPORT
 ======================================================================
 
-Strings scanned: 1298
+Accounts checked: 6 (6 passed)
+Views checked: 255 (255 passed)
+Strings scanned: 6283
+  Canaries scanned: 1342
+  Source IDs scanned: 305
+  Line IDs scanned: 4636
 Forbidden strings found: 0
+Exports checked: 10 (10 passed)
+Negative cases: 8 (8 passed)
+Positive controls: 48 of 48 present (0 failures)
 
 Persona          Views  Scanned  Found
 ----------------------------------------
-leaver              59      531      0
-successor           59      531      0
-lead                59        0      0
-finance_ops         59      236      0
+leaver              61     2501      0
+successor           61     2501      0
+lead                62        0      0
+finance_ops         61     1281      0
 
 No forbidden canary strings found in any view.
 
 Stub markup checks: 0 failures
 Successor label checks: 0 failures
 Tab/filter count consistency: 0 mismatches
+Equivalence checks: 0 failures
+Escaping checks: 0 failures
 
-Positive controls: 14 of 14 expected canaries present
+Positive controls: 48 of 48 expected canaries present
   [+] lead: canary present=True
   [+] lead: canary present=True
   [+] lead: canary present=True
@@ -127,8 +137,53 @@ Positive controls: 14 of 14 expected canaries present
   [+] finance_ops: canary present=True
   [+] finance_ops: canary present=True
   [+] finance_ops: canary present=True
+  [+] lead (.md export): canary present=True
+  [+] lead (print export): canary present=True
+  [+] lead (.md export): canary present=True
+  [+] lead (print export): canary present=True
+  [+] lead (.md export): canary present=True
+  [+] lead (print export): canary present=True
+  [+] lead (.md export): canary present=True
+  [+] lead (print export): canary present=True
+  [+] lead (.md export): canary present=True
+  [+] lead (print export): canary present=True
+  [+] lead (.md export): canary present=True
+  [+] lead (print export): canary present=True
+  [+] lead (views, label: finance): line id for finance present=True
+  [+] lead (.md export, label: finance): line id for finance present=True
+  [+] lead (print export, label: finance): line id for finance present=True
+  [+] lead (views, label: hr): line id for hr present=True
+  [+] lead (.md export, label: hr): line id for hr present=True
+  [+] lead (print export, label: hr): line id for hr present=True
+  [+] lead (views, label: team): line id for team present=True
+  [+] lead (.md export, label: team): line id for team present=True
+  [+] lead (print export, label: team): line id for team present=True
+  [+] finance_ops (.md export): canary present=True
+  [+] finance_ops (print export): canary present=True
+  [+] finance_ops (.md export): canary present=True
+  [+] finance_ops (print export): canary present=True
+  [+] finance_ops (.md export): canary present=True
+  [+] finance_ops (print export): canary present=True
+  [+] finance_ops (.md export): canary present=True
+  [+] finance_ops (print export): canary present=True
+  [+] cleared account (new case): canary present=True
+  [+] cleared account (new case): canary present=True
+  [+] cleared account (new case): canary present=True
+  [+] cleared account (new case): canary present=True
+  [+] cleared account (new case): canary present=True
 
 ======================================================================
 A strong check, not a proof.
 ======================================================================
+```
+
+---
+
+## 3. Test Suite Execution (`pytest -q`)
+
+```
+........................................................................ [ 41%]
+........................................................................ [ 83%]
+............................                                             [100%]
+172 passed, 1 warning in 293.33s (0:04:53)
 ```

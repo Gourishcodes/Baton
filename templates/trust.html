@@ -13,7 +13,11 @@
     <div>
       <div class="counter">{{ leak_total }}</div>
       <div class="counter-label">Planted strings found in views the role may not see</div>
+      {% if case and case.id != 1 %}
+      <p class="meta" style="margin-top:var(--s2)">For new cases, only the access function protects restricted text and not the string scan.</p>
+      {% else %}
       <p class="meta" style="margin-top:var(--s2)">{{ leak_scanned_summary }}. A strong check, not a proof.</p>
+      {% endif %}
     </div>
     {% if case and case.id != 1 %}
     <div class="banner">

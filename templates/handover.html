@@ -9,6 +9,12 @@
     <p class="meta" style="margin-top:var(--s1)">Synthesised from approved claims. Filtered to your clearance.</p>
   </div>
 
+  {% if error %}
+  <div class="banner" style="margin-bottom:var(--s4)">
+    {{ error }}
+  </div>
+  {% endif %}
+
   {% if not counts.has_run %}
   <div class="banner" style="margin-top:var(--s4)">
     Nothing has been extracted yet. Build the handover from the Sources page.
