@@ -222,10 +222,57 @@ label.lbl{display:block;font:500 11px/16px var(--mono);letter-spacing:.06em;text
 }
 
 /* additions */
+.bar .btn, .bar .btn--quiet {
+  height: 30px;
+  white-space: nowrap;
+}
+.bar-user {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+.col-seen {
+  white-space: nowrap;
+}
+form[action="/demo/reset"] button {
+  white-space: nowrap;
+}
+#ledger-container.main-with-drawer ~ .wire,
+body:has(#drawer) .wire {
+  padding-right: 456px;
+  word-break: break-word;
+}
 @media (max-width:900px){
   .bar .wrap{gap:var(--s2)}
-  .persona button{padding:0 var(--s2);font-size:11px}
-  .bar .btn--quiet{padding:0 var(--s2);font-size:11px;height:28px}
+  .bar .spacer{display:none}
+  .persona button{padding:0 var(--s2);font-size:11px;height:28px}
+  .bar .btn, .bar .btn--quiet{padding:0 var(--s2);font-size:11px;height:28px;white-space:nowrap}
+  .bar-user {
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+  }
+  .bar-user .user-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .bar-user .user-role,
+  .bar-user .tag {
+    display: none;
+  }
+  .col-sha {
+    display: none;
+  }
+  .col-seen .seen-word {
+    display: none;
+  }
+  #ledger-container.main-with-drawer ~ .wire,
+  body:has(#drawer) .wire {
+    padding-right: 0;
+  }
 }
 @media print{
   .bar, .tabs, .wire, .btn, button {

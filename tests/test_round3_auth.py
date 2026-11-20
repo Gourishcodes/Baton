@@ -238,8 +238,12 @@ def test_invites_single_use_expiry_wrong_token_gives_standard_404():
     user_id = create_user("invited_user@example.com", "Invited User", "password12345")
     client.post("/login", data={"email": "invited_user@example.com", "password": "password12345"})
 
+    # Viewing invite does not consume it
+    resp_view = client.get(f"/invite/{valid_token}")
+    assert resp_view.status_code == 200
+
     # Redeeming invite while logged in redirects to case claims
-    resp_redeem = client.get(f"/invite/{valid_token}", follow_redirects=False)
+    resp_redeem = client.post(f"/invite/{valid_token}/accept", follow_redirects=False)
     assert resp_redeem.status_code in (302, 303)
     assert "/case/1/claims" in resp_redeem.headers.get("location", "")
 

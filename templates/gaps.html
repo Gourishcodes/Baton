@@ -10,7 +10,17 @@
     <p class="meta" style="margin-top:var(--s1)">Missing owners, undefined decisions, and open questions that need the leaver's answer.</p>
   </div>
 
-  {% if gaps %}
+  {% if csv_rule_skipped_message %}
+  <div class="banner" style="margin-bottom:var(--s6)">
+    {{ csv_rule_skipped_message }}
+  </div>
+  {% endif %}
+
+  {% if not counts.has_run %}
+  <div class="banner" style="margin-top:var(--s4)">
+    Nothing has been extracted yet. Build the handover from the Sources page.
+  </div>
+  {% elif gaps %}
   <div style="display:flex;flex-direction:column;gap:var(--s6)">
     {% for g in gaps %}
     <div class="gap" id="gap-{{ g.id }}">

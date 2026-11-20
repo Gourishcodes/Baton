@@ -10,7 +10,11 @@
     <p class="meta" style="margin-top:var(--s1)">Disagreements found across sources. The approver decides.</p>
   </div>
 
-  {% if conflicts %}
+  {% if not counts.has_run %}
+  <div class="banner" style="margin-top:var(--s4)">
+    Nothing has been extracted yet. Build the handover from the Sources page.
+  </div>
+  {% elif conflicts %}
   <div style="display:flex;flex-direction:column;gap:var(--s8);margin-top:var(--s6)">
     {% for cf in conflicts %}
     <div style="border-top:1px solid var(--ink);padding-top:var(--s4)">

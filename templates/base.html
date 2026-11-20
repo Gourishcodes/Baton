@@ -18,26 +18,27 @@
       Baton
     </a>
     {% if case %}
-    <div class="casename"><b>{{ case.name }}</b> &nbsp;{{ case.leaver }} to {{ case.successor }} &nbsp;&middot;&nbsp; {{ case.leaver.split()[0] if case.leaver else 'Meera' }} leaves in 14 days</div>
+    <div class="casename"><a href="/cases" style="color:var(--ink-2);text-decoration:none">Cases</a> &nbsp;&middot;&nbsp; <b>{{ case.name }}</b> &nbsp;{{ case.leaver }} to {{ case.successor }} &nbsp;&middot;&nbsp; {{ case.leaver.split()[0] if case.leaver else 'Meera' }} leaves in 14 days</div>
     {% endif %}
     <div class="spacer"></div>
-    {% if principal and (principal.is_demo or not user or user.is_demo) %}
+    {% if principal and principal.is_demo %}
     <form method="post" action="/role" class="persona" role="radiogroup" aria-label="Viewing as">
       <button type="submit" name="role" value="leaver" role="radio" aria-checked="{{ 'true' if (role == 'leaver') else 'false' }}">Leaver</button>
       <button type="submit" name="role" value="lead" role="radio" aria-checked="{{ 'true' if (role in ['lead', 'approver']) else 'false' }}">Approver</button>
       <button type="submit" name="role" value="successor" role="radio" aria-checked="{{ 'true' if (role == 'successor') else 'false' }}">Successor</button>
     </form>
-    <form method="post" action="/logout" style="display:inline;margin-left:var(--s2)">
+    <form method="post" action="/logout" style="display:inline">
       <button type="submit" class="btn btn--quiet">Sign out</button>
     </form>
     <div class="notauth">Demo accounts share a public password. Real accounts do not.</div>
     {% elif principal %}
-    <div class="persona" style="display:flex;align-items:center;gap:var(--s2)">
-      <span><b>{{ principal.name }}</b> &middot; {{ principal.role|capitalize }}</span>
+    <div class="bar-user" style="display:flex;align-items:center;gap:var(--s2);min-width:0">
+      <span class="user-name"><b>{{ principal.name }}</b></span>
+      <span class="user-role">&nbsp;&middot;&nbsp;{{ principal.role|capitalize }}</span>
       {% for label in principal.holds|sort %}
       <span class="tag">{{ label }}</span>
       {% endfor %}
-      <form method="post" action="/logout" style="display:inline;margin-left:var(--s2)">
+      <form method="post" action="/logout" style="display:inline;flex-shrink:0">
         <button type="submit" class="btn btn--quiet">Sign out</button>
       </form>
     </div>
@@ -50,14 +51,15 @@
   {% set current_case_id = case.id if case else 1 %}
   <nav class="tabs" aria-label="Case">
     <a href="/case/{{ current_case_id }}/sources" {% if active_tab == 'sources' %}aria-current="page"{% endif %}>Sources <span class="num">{{ counts.sources }}</span></a>
-    <a href="/case/{{ current_case_id }}/claims" {% if active_tab == 'claims' %}aria-current="page"{% endif %}>Claims <span class="num">{{ counts.claims }}</span></a>
-    <a href="/case/{{ current_case_id }}/gaps" {% if active_tab == 'gaps' %}aria-current="page"{% endif %}>Gaps <span class="num">{{ counts.gaps }}</span></a>
-    <a href="/case/{{ current_case_id }}/conflicts" {% if active_tab == 'conflicts' %}aria-current="page"{% endif %}>Conflicts <span class="num">{{ counts.conflicts }}</span></a>
+    <a href="/case/{{ current_case_id }}/claims" {% if active_tab == 'claims' %}aria-current="page"{% endif %}>Claims{% if counts.has_run %} <span class="num">{{ counts.claims }}</span>{% endif %}</a>
+    <a href="/case/{{ current_case_id }}/gaps" {% if active_tab == 'gaps' %}aria-current="page"{% endif %}>Gaps{% if counts.has_run %} <span class="num">{{ counts.gaps }}</span>{% endif %}</a>
+    <a href="/case/{{ current_case_id }}/conflicts" {% if active_tab == 'conflicts' %}aria-current="page"{% endif %}>Conflicts{% if counts.has_run %} <span class="num">{{ counts.conflicts }}</span>{% endif %}</a>
     <a href="/case/{{ current_case_id }}/timeline" {% if active_tab == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
-    <a href="/case/{{ current_case_id }}/handover" {% if active_tab == 'handover' %}aria-current="page"{% endif %}>Handover <span class="num">v{{ counts.version or 1 }}</span></a>
-    <a href="/case/{{ current_case_id }}/approvals" {% if active_tab == 'approvals' %}aria-current="page"{% endif %}>Approvals <span class="num">{{ counts.approvals }}</span></a>
+    <a href="/case/{{ current_case_id }}/handover" {% if active_tab == 'handover' %}aria-current="page"{% endif %}>Handover{% if counts.has_run %} <span class="num">v{{ counts.version or 1 }}</span>{% endif %}</a>
+    <a href="/case/{{ current_case_id }}/approvals" {% if active_tab == 'approvals' %}aria-current="page"{% endif %}>Approvals{% if counts.has_run %} <span class="num">{{ counts.approvals }}</span>{% endif %}</a>
     {% if principal and principal.is_owner %}
     <a href="/case/{{ current_case_id }}/members" {% if active_tab == 'members' %}aria-current="page"{% endif %}>Members</a>
+    <a href="/case/{{ current_case_id }}/access" {% if active_tab == 'access' %}aria-current="page"{% endif %}>Access</a>
     {% endif %}
     <a href="/trust" {% if active_tab == 'trust' %}aria-current="page"{% endif %}>Trust</a>
   </nav>

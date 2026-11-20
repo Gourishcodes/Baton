@@ -9,6 +9,7 @@ import re
 
 from . import db, access
 from .auth import Principal
+from .access_log import record_delivered_item
 
 
 def _check_principal(principal: Principal):
@@ -24,6 +25,61 @@ def get_case(case_id: int, principal: Principal):
     return dict(row) if row else None
 
 
+def get_user_cases(user_id: int) -> list[dict]:
+    """Get all cases where user is a member, ordered by case id."""
+    conn = db.get_conn()
+    rows = conn.execute(
+        """SELECT c.*, m.role, m.is_owner, m.labels
+           FROM cases c
+           JOIN memberships m ON c.id = m.case_id
+           WHERE m.user_id = ?
+           ORDER BY c.id ASC""",
+        (user_id,)
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["labels"] = json.loads(r["labels"])
+        d["is_owner"] = bool(r["is_owner"])
+        out.append(d)
+    return out
+
+
+def create_case(name: str, leaver: str, successor: str, approver: str, user_id: int) -> int:
+    """Create a new case with the creator as owner and approver."""
+    conn = db.get_conn()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor = conn.execute(
+        "INSERT INTO cases (name, leaver, successor, approver, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
+        (name.strip(), leaver.strip(), successor.strip(), approver.strip(), now_iso)
+    )
+    case_id = cursor.lastrowid
+    conn.execute(
+        "INSERT INTO memberships (case_id, user_id, role, is_owner, labels, added_by, added_at) VALUES (?, ?, 'approver', 1, ?, NULL, ?)",
+        (case_id, user_id, json.dumps(["finance", "hr", "team"]), now_iso)
+    )
+    conn.commit()
+    return case_id
+
+
+def delete_case(case_id: int) -> None:
+    """Delete a case and all associated data."""
+    db.delete_case(case_id)
+
+
+def get_source_cite_count(case_id: int, source_id: str) -> int:
+    """Count distinct claims in this case citing lines from this source."""
+    conn = db.get_conn()
+    row = conn.execute(
+        """SELECT COUNT(DISTINCT cc.claim_id) as cnt
+           FROM claim_cites cc
+           JOIN claims c ON cc.claim_id = c.id
+           WHERE c.case_id = ? AND (cc.line_id LIKE ? OR cc.line_id LIKE ?)""",
+        (case_id, f"{source_id}:%", f"{source_id}·%")
+    ).fetchone()
+    return row["cnt"] if row else 0
+
+
 def get_sources(case_id: int, principal: Principal):
     """Get sources visible to the principal, scoped by case_id."""
     _check_principal(principal)
@@ -35,6 +91,7 @@ def get_sources(case_id: int, principal: Principal):
     for row in rows:
         labels = json.loads(row["labels"])
         if access.visible(labels, principal):
+            record_delivered_item("source", row["id"], labels)
             d = dict(row)
             d["labels"] = labels
             d["line_count"] = conn.execute(
@@ -106,6 +163,7 @@ def get_claims(case_id: int, principal: Principal, type_filter: str = None,
         is_visible = access.visible(labels, principal)
 
         if is_visible:
+            record_delivered_item("claim", row["id"], labels)
             d = dict(row)
             d["labels"] = labels
             d["flags"] = json.loads(row["flags"])
@@ -181,6 +239,7 @@ def get_claim(case_id: int, claim_id: int, principal: Principal):
     if not access.visible(labels, principal):
         return None
 
+    record_delivered_item("claim", claim_id, labels)
     d = dict(row)
     d["labels"] = labels
     d["flags"] = json.loads(row["flags"])
@@ -252,6 +311,7 @@ def get_gaps(case_id: int, principal: Principal):
         is_visible = access.visible(labels, principal)
 
         if is_visible:
+            record_delivered_item("gap", row["id"], labels)
             d = dict(row)
             d["labels"] = labels
             d["visible"] = True
@@ -306,6 +366,7 @@ def get_gap(case_id: int, gap_id: int, principal: Principal):
     if not access.visible(labels, principal):
         return None
 
+    record_delivered_item("gap", gap_id, labels)
     d = dict(row)
     d["labels"] = labels
     d["visible"] = True
@@ -326,6 +387,7 @@ def get_conflicts(case_id: int, principal: Principal):
         is_visible = access.visible(labels, principal)
 
         if is_visible:
+            record_delivered_item("conflict", row["id"], labels)
             d = dict(row)
             d["labels"] = labels
             d["visible"] = True
@@ -361,6 +423,8 @@ def get_lines_for_source(case_id: int, source_id: str, principal: Principal):
     if not access.visible(labels, principal):
         return None, None
 
+    record_delivered_item("source", source_id, labels)
+
     lines = conn.execute(
         """SELECT l.* FROM lines l
            JOIN sources s ON l.source_id = s.id
@@ -387,6 +451,8 @@ def get_line(case_id: int, line_id: str, principal: Principal):
     labels = json.loads(line["labels"])
     if not access.visible(labels, principal):
         return None
+
+    record_delivered_item("line", line_id, labels)
 
     return dict(line) | {"labels": labels}
 
@@ -507,6 +573,7 @@ def reset_demo_case(case_id: int = 1):
         conn.execute("DELETE FROM claims WHERE case_id = 1 AND run_id > 1")
         conn.execute("DELETE FROM gaps WHERE case_id = 1 AND run_id > 1")
         conn.execute("DELETE FROM runs WHERE case_id = 1 AND id > 1")
+    conn.execute("DELETE FROM access_log WHERE case_id = ?", (case_id,))
     conn.execute("UPDATE cases SET status = 'open' WHERE id = ?", (case_id,))
     conn.commit()
 
@@ -533,17 +600,24 @@ def build_handover(case_id: int, principal: Principal) -> dict:
 
     # For a claim in an open conflict, add note:
     # "Disagrees with the claim at <first cite of the other claim>. Not yet decided by the approver."
+    # The note may appear only when the other claim is visible to that person under access.visible.
     conn = db.get_conn()
     for c in approved_claims:
         conflict_with = c.get("flags", {}).get("conflict_with")
         if conflict_with and isinstance(conflict_with, list) and len(conflict_with) > 0 and c.get("visible", True):
             other_cid = conflict_with[0]
             other_claim = conn.execute(
-                "SELECT identity FROM claims WHERE id = ? AND case_id = ?",
+                "SELECT identity, labels FROM claims WHERE id = ? AND case_id = ?",
                 (other_cid, case_id)
             ).fetchone()
+            if not other_claim:
+                continue
+            other_labels = json.loads(other_claim["labels"])
+            if not access.visible(other_labels, principal):
+                continue
+
             is_open = True
-            if other_claim and other_claim["identity"]:
+            if other_claim["identity"]:
                 other_dec = conn.execute(
                     "SELECT decision FROM decisions WHERE identity = ? AND case_id = ?",
                     (other_claim["identity"], case_id)
@@ -679,7 +753,7 @@ def render_handover_markdown(handover_data: dict, principal: Principal) -> str:
         vis_extra = [it for it in (extra_items or []) if it.get("visible", True)]
 
         if not vis_items and not vis_extra:
-            lines.append("None")
+            lines.append("No approved items in this section.")
             lines.append("")
             return
 
@@ -728,8 +802,8 @@ def render_handover_markdown(handover_data: dict, principal: Principal) -> str:
     app_at = latest_version["approved_at"][:16].replace("T", " ")
     now_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     lines.append(
-        f"Handover version {latest_version['n']}, approved by {latest_version['approved_by']}, {app_at}. "
-        f"Exported for {principal.name}, {now_at}."
+        f"Handover version {latest_version['n']}, approved by {latest_version['approved_by']}, {app_at} UTC. "
+        f"Exported for {principal.name}, {now_at} UTC."
     )
     lines.append("")
 
@@ -741,8 +815,15 @@ def log_export(case_id: int, user_id: int, route: str, fmt: str, version_n: int,
     if conn is None:
         conn = db.get_conn()
     now_iso = datetime.now(timezone.utc).isoformat()
-    items_json = json.dumps({"format": fmt, "version": version_n})
-    labels_seen_json = json.dumps([])
+    clean_fmt = "md" if fmt in ("md", "markdown") else fmt
+    items_json = json.dumps({"format": clean_fmt, "version": version_n})
+    labels_seen = []
+    from .access_log import get_collector
+    collector = get_collector()
+    if collector is not None:
+        labels_seen = sorted(collector.get("labels_seen", []))
+        collector["action"] = "export"
+    labels_seen_json = json.dumps(labels_seen)
     conn.execute(
         "INSERT INTO access_log (at, user_id, case_id, route, action, items, labels_seen) "
         "VALUES (?, ?, ?, ?, 'export', ?, ?)",

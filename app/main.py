@@ -4,16 +4,21 @@ Follows docs/SPEC.md sections 10, 7, docs/DESIGN.md, and ROUND3_SPEC.
 """
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import csv
+import hashlib
+import io
 import json
+import logging
 import os
+import threading
 from typing import Annotated
 
-from fastapi import FastAPI, Request, Form, Response, HTTPException, Depends, status
+from fastapi import FastAPI, Request, Form, Response, HTTPException, Depends, status, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import db, access, repo, review, extract
+from . import db, access, repo, review, extract, verify, parsers, limits
 from .auth import (
     Principal,
     demo_principal,
@@ -30,15 +35,28 @@ from .auth import (
     create_invite,
     get_invite,
     redeem_invite,
+    AlreadyMemberError,
     verify_password,
     get_client_ip,
     get_max_users,
     DEMO_PASSWORD,
 )
 from .middleware import WireCheckMiddleware, SECRET_KEY
+from .access_log import (
+    AccessLogMiddleware,
+    set_collector_principal,
+    log_denied,
+    log_clearance_change,
+    log_invite_created,
+    get_sources_seen_counts,
+    get_who_has_seen_label,
+    get_access_logs,
+)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 templates = Jinja2Templates(directory=os.path.join(ROOT, "templates"))
+
+EXTRACTION_STATUS: dict[int, dict] = {}
 
 
 class AnonymousError(Exception):
@@ -85,6 +103,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Baton", lifespan=lifespan)
 app.add_middleware(WireCheckMiddleware)
+app.add_middleware(AccessLogMiddleware)
 app.mount("/static", StaticFiles(directory=os.path.join(ROOT, "static")), name="static")
 
 
@@ -155,6 +174,7 @@ def get_current_principal(request: Request, case_id: int) -> Principal:
     )
     request.state.principal = principal
     request.state.user = user
+    set_collector_principal(principal.user_id, principal.case_id)
     return principal
 
 
@@ -204,20 +224,23 @@ def get_top_level_principal(request: Request) -> tuple[dict, Principal]:
 
 def get_nav_counts(case_id: int, principal: Principal) -> dict:
     """Compute count badges for the nav tabs."""
+    run = repo.get_latest_run(case_id)
+    has_run = run is not None
     sources = repo.get_sources(case_id, principal)
-    claims = repo.get_claims(case_id, principal)
-    gaps = repo.get_gaps(case_id, principal)
-    conflicts = repo.get_conflicts(case_id, principal)
-    versions = repo.get_versions(case_id, principal)
-    latest_v = repo.get_latest_version(case_id)
+    claims = repo.get_claims(case_id, principal) if has_run else []
+    gaps = repo.get_gaps(case_id, principal) if has_run else []
+    conflicts = repo.get_conflicts(case_id, principal) if has_run else []
+    versions = repo.get_versions(case_id, principal) if has_run else []
+    latest_v = repo.get_latest_version(case_id) if has_run else None
 
     return {
+        "has_run": has_run,
         "sources": len(sources),
-        "claims": len(claims),
-        "gaps": len(gaps),
-        "conflicts": len(conflicts),
-        "version": latest_v or 1,
-        "approvals": len(versions) or 1,
+        "claims": len(claims) if has_run else None,
+        "gaps": len(gaps) if has_run else None,
+        "conflicts": len(conflicts) if has_run else None,
+        "version": latest_v or 1 if has_run else None,
+        "approvals": len(versions) or 1 if has_run else None,
     }
 
 
@@ -283,20 +306,27 @@ async def login_post(request: Request):
     # Success
     reset_login_attempts(email, ip)
 
+    redeem_case_id = None
     if invite:
         try:
-            redeem_invite(str(invite), user["id"])
+            redeem_case_id = redeem_invite(str(invite), user["id"])
+        except AlreadyMemberError:
+            inv = get_invite(str(invite))
+            if inv:
+                redeem_case_id = inv["case_id"]
         except ValueError:
             pass
 
     raw_token = create_session(user["id"])
 
-    mem = conn.execute(
-        "SELECT case_id FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
-        (user["id"],)
-    ).fetchone()
-
-    target_url = f"/case/{mem['case_id']}/claims" if mem else "/"
+    if redeem_case_id:
+        target_url = f"/case/{redeem_case_id}/claims"
+    else:
+        mem = conn.execute(
+            "SELECT case_id FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
+            (user["id"],)
+        ).fetchone()
+        target_url = f"/case/{mem['case_id']}/claims" if mem else "/"
     response = RedirectResponse(url=target_url, status_code=status.HTTP_303_SEE_OTHER)
 
     is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
@@ -408,20 +438,23 @@ async def signup_post(request: Request):
 
     record_signup_attempt(ip)
 
+    redeem_case_id = None
     if invite:
         try:
-            redeem_invite(str(invite), user_id)
-        except ValueError:
+            redeem_case_id = redeem_invite(str(invite), user_id)
+        except (AlreadyMemberError, ValueError):
             pass
 
     raw_token = create_session(user_id)
 
-    mem = conn.execute(
-        "SELECT case_id FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
-        (user_id,)
-    ).fetchone()
-
-    target_url = f"/case/{mem['case_id']}/claims" if mem else "/"
+    if redeem_case_id:
+        target_url = f"/case/{redeem_case_id}/claims"
+    else:
+        mem = conn.execute(
+            "SELECT case_id FROM memberships WHERE user_id = ? ORDER BY case_id ASC LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        target_url = f"/case/{mem['case_id']}/claims" if mem else "/"
     response = RedirectResponse(url=target_url, status_code=status.HTTP_303_SEE_OTHER)
 
     is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
@@ -467,9 +500,88 @@ def home(request: Request):
     )
 
 
+@app.get("/cases", response_class=HTMLResponse)
+def cases_list(request: Request):
+    user, principal = get_top_level_principal(request)
+    cases = repo.get_user_cases(user["id"])
+    case = repo.get_case(principal.case_id, principal) if principal else None
+    counts = get_nav_counts(principal.case_id, principal) if case else {}
+
+    return templates.TemplateResponse(
+        request=request,
+        name="cases.html",
+        context={
+            "request": request,
+            "user": user,
+            "principal": principal,
+            "role": principal.role if principal else "lead",
+            "cases": cases,
+            "case": case,
+            "counts": counts,
+            "active_tab": "cases",
+            "error": None,
+        }
+    )
+
+
+@app.post("/cases")
+async def create_case_post(request: Request):
+    user, principal = get_top_level_principal(request)
+    if user["is_demo"]:
+        return not_found_response()
+
+    form = await request.form()
+    name = str(form.get("name", "")).strip()
+    leaver = str(form.get("leaver", "")).strip()
+    successor = str(form.get("successor", "")).strip()
+    approver = str(form.get("approver", "")).strip()
+
+    if not name:
+        cases = repo.get_user_cases(user["id"])
+        case = repo.get_case(principal.case_id, principal) if principal else None
+        counts = get_nav_counts(principal.case_id, principal) if case else {}
+        return templates.TemplateResponse(
+            request=request,
+            name="cases.html",
+            context={
+                "request": request,
+                "user": user,
+                "principal": principal,
+                "role": principal.role if principal else "lead",
+                "cases": cases,
+                "case": case,
+                "counts": counts,
+                "active_tab": "cases",
+                "error": "Case name is required.",
+            },
+            status_code=400,
+        )
+
+    case_id = repo.create_case(name, leaver, successor, approver, user["id"])
+    return RedirectResponse(url=f"/case/{case_id}/sources", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/case/{case_id}/delete")
+def delete_case_post(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    if not principal.is_owner or principal.is_demo or case_id == 1:
+        return not_found_response()
+
+    repo.delete_case(case_id)
+    return RedirectResponse(url="/cases", status_code=status.HTTP_303_SEE_OTHER)
+
+
 @app.post("/role")
 def switch_role(request: Request, role: Annotated[str, Form()]):
     """Create a real session for the matching seeded demo account (ROUND3_SPEC 1.4)."""
+    raw_session = request.cookies.get("baton_session")
+    current_user = get_user_from_token(raw_session) if raw_session else None
+    if current_user and not current_user.get("is_demo"):
+        return not_found_response()
+
     role_map = {
         "lead": "divya@example.com",
         "approver": "divya@example.com",
@@ -553,22 +665,148 @@ def demo_reset(request: Request):
 
 @app.get("/invite/{token}", response_class=HTMLResponse)
 def view_invite(request: Request, token: str):
-    """View and redeem an invitation."""
+    """View invitation without consuming it.
+    Works for anonymous visitors and signed-in members.
+    """
     invite = get_invite(token)
     if not invite:
         return not_found_response()
 
     raw_token = request.cookies.get("baton_session")
     user = get_user_from_token(raw_token)
+    already_member = False
     if user:
-        case_id = redeem_invite(token, user["id"])
-        return RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
+        conn = db.get_conn()
+        mem = conn.execute(
+            "SELECT * FROM memberships WHERE case_id = ? AND user_id = ?",
+            (invite["case_id"], user["id"])
+        ).fetchone()
+        if mem:
+            already_member = True
 
     return templates.TemplateResponse(
         request=request,
         name="invite.html",
-        context={"request": request, "invite": invite, "token": token}
+        context={
+            "request": request,
+            "invite": invite,
+            "token": token,
+            "user": user,
+            "already_member": already_member,
+            "error": None,
+        }
     )
+
+
+@app.post("/invite/{token}")
+@app.post("/invite/{token}/accept")
+async def accept_invite_post(request: Request, token: str):
+    """Redeem an invitation when joining."""
+    invite = get_invite(token)
+    if not invite:
+        return not_found_response()
+
+    raw_token = request.cookies.get("baton_session")
+    user = get_user_from_token(raw_token)
+
+    if user:
+        try:
+            case_id = redeem_invite(token, user["id"])
+            return RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
+        except AlreadyMemberError:
+            return RedirectResponse(url=f"/case/{invite['case_id']}/claims", status_code=status.HTTP_303_SEE_OTHER)
+        except Exception:
+            return not_found_response()
+
+    # Anonymous submission
+    form = await request.form()
+    name = str(form.get("name", "")).strip()
+    email = str(form.get("email", "")).strip().lower()
+    password = str(form.get("password", ""))
+
+    ip = get_client_ip(request)
+
+    if name:
+        # Sign-up attempt
+        if is_signup_throttled(ip):
+            return Response("Too many signups from this IP. Try again later.", status_code=429)
+        if len(password) < 10:
+            return templates.TemplateResponse(
+                request=request,
+                name="invite.html",
+                context={
+                    "request": request,
+                    "invite": invite,
+                    "token": token,
+                    "user": None,
+                    "already_member": False,
+                    "error": "Password must be at least 10 characters",
+                },
+                status_code=400,
+            )
+        try:
+            user_id = create_user(email, name, password, is_demo=0)
+        except ValueError as e:
+            return templates.TemplateResponse(
+                request=request,
+                name="invite.html",
+                context={
+                    "request": request,
+                    "invite": invite,
+                    "token": token,
+                    "user": None,
+                    "already_member": False,
+                    "error": str(e),
+                },
+                status_code=400,
+            )
+        record_signup_attempt(ip)
+        try:
+            case_id = redeem_invite(token, user_id)
+        except Exception:
+            case_id = invite["case_id"]
+
+        raw_token = create_session(user_id)
+        response = RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
+        is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+        response.set_cookie(key="baton_session", value=raw_token, max_age=12 * 3600, httponly=True, samesite="lax", secure=is_https)
+        return response
+    elif email and password:
+        # Sign-in attempt
+        if is_login_throttled(email, ip):
+            return Response("Try again later", status_code=429)
+        conn = db.get_conn()
+        user_row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if not user_row or not verify_password(password, user_row["pw_hash"]):
+            record_login_attempt(email, ip)
+            return templates.TemplateResponse(
+                request=request,
+                name="invite.html",
+                context={
+                    "request": request,
+                    "invite": invite,
+                    "token": token,
+                    "user": None,
+                    "already_member": False,
+                    "error": "Invalid email or password",
+                },
+                status_code=401,
+            )
+        reset_login_attempts(email, ip)
+        try:
+            case_id = redeem_invite(token, user_row["id"])
+        except AlreadyMemberError:
+            case_id = invite["case_id"]
+        except Exception:
+            case_id = invite["case_id"]
+
+        raw_token = create_session(user_row["id"])
+        response = RedirectResponse(url=f"/case/{case_id}/claims", status_code=status.HTTP_303_SEE_OTHER)
+        is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+        response.set_cookie(key="baton_session", value=raw_token, max_age=12 * 3600, httponly=True, samesite="lax", secure=is_https)
+        return response
+
+    return not_found_response()
 
 
 @app.get("/case/{case_id}/members", response_class=HTMLResponse)
@@ -617,6 +855,44 @@ def members_view(
     )
 
 
+@app.get("/case/{case_id}/access", response_class=HTMLResponse)
+def access_log_view(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    label: str | None = None,
+):
+    """Owner view of access log and label visibility."""
+    if not principal.is_owner:
+        return not_found_response()
+
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    counts = get_nav_counts(case_id, principal)
+    selected_label = (label or "hr").strip().lower()
+    who_has_seen = get_who_has_seen_label(case_id, selected_label)
+    logs = get_access_logs(case_id)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="access.html",
+        context={
+            "request": request,
+            "role": principal.role,
+            "principal": principal,
+            "case": case,
+            "counts": counts,
+            "active_tab": "access",
+            "selected_label": selected_label,
+            "available_labels": ["hr", "finance", "team"],
+            "who_has_seen": who_has_seen,
+            "logs": logs,
+        }
+    )
+
+
 @app.post("/case/{case_id}/members/{target_user_id}")
 async def update_member(
     request: Request,
@@ -628,8 +904,16 @@ async def update_member(
     if principal.is_demo or not principal.is_owner:
         return not_found_response()
 
+    conn = db.get_conn()
+    target_mem = conn.execute(
+        "SELECT * FROM memberships WHERE case_id = ? AND user_id = ?",
+        (case_id, target_user_id)
+    ).fetchone()
+    if not target_mem:
+        return not_found_response()
+
     form = await request.form()
-    role = str(form.get("role", "viewer")).strip()
+    role = str(form.get("role", target_mem["role"])).strip()
     labels = form.getlist("labels")
 
     allowed_roles = {"approver", "leaver", "successor", "viewer"}
@@ -639,12 +923,25 @@ async def update_member(
     allowed_labels = {"team", "finance", "hr"}
     clean_labels = [l for l in labels if l in allowed_labels]
 
-    conn = db.get_conn()
+    owner_count = conn.execute(
+        "SELECT COUNT(*) as c FROM memberships WHERE case_id = ? AND is_owner = 1",
+        (case_id,)
+    ).fetchone()["c"]
+
+    # Invariant: A case always keeps at least one owner.
+    # Refuse any role or clearance change that would leave a case with no owner.
+    if target_mem["is_owner"] and owner_count <= 1:
+        if role != "approver":
+            return Response("A case must always keep at least one owner.", status_code=400)
+        if not clean_labels:
+            return Response("A case must always keep at least one owner.", status_code=400)
+
     conn.execute(
         "UPDATE memberships SET role = ?, labels = ? WHERE case_id = ? AND user_id = ?",
         (role, json.dumps(sorted(clean_labels)), case_id, target_user_id)
     )
     conn.commit()
+    log_clearance_change(case_id, principal.user_id, request.url.path, target_user_id, role, clean_labels)
 
     return RedirectResponse(url=f"/case/{case_id}/members", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -676,6 +973,7 @@ async def create_case_invite(
 
     token = create_invite(case_id, role, clean_labels, principal.user_id)
     invite_url = f"/invite/{token}"
+    log_invite_created(case_id, principal.user_id, request.url.path, token, role, clean_labels)
 
     counts = get_nav_counts(case_id, principal)
 
@@ -713,6 +1011,7 @@ def sources_view(
     request: Request,
     case_id: int,
     principal: Annotated[Principal, Depends(get_current_principal)],
+    open_source: str | None = None,
 ):
     case = repo.get_case(case_id, principal)
     if not case:
@@ -720,6 +1019,48 @@ def sources_view(
 
     sources = repo.get_sources(case_id, principal)
     counts = get_nav_counts(case_id, principal)
+
+    if principal.is_owner:
+        seen_counts = get_sources_seen_counts(case_id)
+        for s in sources:
+            s["seen_by_count"] = seen_counts.get(str(s["id"]), 0)
+
+    drawer_open = False
+    drawer_html = ""
+    if open_source:
+        src, lines = repo.get_lines_for_source(case_id, open_source, principal)
+        if src and lines:
+            drawer_open = True
+            drawer_html = templates.get_template("drawer.html").render({
+                "request": request,
+                "source": src,
+                "lines": lines,
+                "target_line_id": None,
+                "cite_count": repo.get_source_cite_count(case_id, open_source),
+                "case": case,
+            })
+
+    st = EXTRACTION_STATUS.get(case_id)
+    if not st and case_id != 1:
+        latest_run = repo.get_latest_run(case_id)
+        if latest_run:
+            conn = db.get_conn()
+            claims_count = conn.execute("SELECT COUNT(*) as c FROM claims WHERE run_id = ?", (latest_run["id"],)).fetchone()["c"]
+            cited_lines_checked = conn.execute(
+                "SELECT COUNT(*) as c FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE run_id = ?)",
+                (latest_run["id"],)
+            ).fetchone()["c"]
+            conflicts_count = conn.execute("SELECT COUNT(*) as c FROM conflicts WHERE run_id = ?", (latest_run["id"],)).fetchone()["c"]
+            gaps_count = conn.execute("SELECT COUNT(*) as c FROM gaps WHERE run_id = ?", (latest_run["id"],)).fetchone()["c"]
+            res = {
+                "claims_count": claims_count,
+                "cited_lines_checked": cited_lines_checked,
+                "conflicts_count": conflicts_count,
+                "gaps_count": gaps_count,
+            }
+            st = {"status": "done", "step": "Complete", "error": None, "res": res}
+
+    st = st or {}
 
     return templates.TemplateResponse(
         request=request,
@@ -733,18 +1074,334 @@ def sources_view(
             "sources": sources,
             "active_tab": "sources",
             "parse_error": None,
+            "drawer_open": drawer_open,
+            "drawer_html": drawer_html,
+            "case_id": case_id,
+            "status": st.get("status"),
+            "step": st.get("step"),
+            "error": st.get("error"),
+            "res": st.get("res"),
+        }
+    )
+
+
+@app.get("/case/{case_id}/sources/{source_id}/drawer", response_class=HTMLResponse)
+def source_drawer_view(
+    request: Request,
+    case_id: int,
+    source_id: str,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    src, lines = repo.get_lines_for_source(case_id, source_id, principal)
+    if not src or not lines:
+        log_denied(case_id, principal.user_id, request.url.path, "source", source_id)
+        return not_found_response()
+
+    cite_count = repo.get_source_cite_count(case_id, source_id)
+    target_line_id = None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="drawer.html",
+        context={
+            "request": request,
+            "source": src,
+            "lines": lines,
+            "target_line_id": target_line_id,
+            "cite_count": cite_count,
+            "case": case,
         }
     )
 
 
 @app.post("/case/{case_id}/sources")
-def upload_source(
+async def upload_source(
     request: Request,
     case_id: int,
     principal: Annotated[Principal, Depends(get_current_principal)],
 ):
-    """Stub upload source for now; redirect back to sources."""
+    if not principal.is_owner or principal.is_demo:
+        return not_found_response()
+
+    case = repo.get_case(case_id, principal)
+    if not case:
+        return not_found_response()
+
+    form = await request.form()
+    upload_file = form.get("file")
+    label_str = str(form.get("label", "team")).strip().lower()
+    if label_str not in ("team", "finance", "hr"):
+        label_str = "team"
+
+    filename = upload_file.filename if (upload_file and hasattr(upload_file, "filename") and upload_file.filename) else "upload"
+
+    def rejection(reason: str):
+        sources = repo.get_sources(case_id, principal)
+        counts = get_nav_counts(case_id, principal)
+        if principal.is_owner:
+            seen_counts = get_sources_seen_counts(case_id)
+            for s in sources:
+                s["seen_by_count"] = seen_counts.get(str(s["id"]), 0)
+        return templates.TemplateResponse(
+            request=request,
+            name="sources.html",
+            context={
+                "request": request,
+                "role": principal.role,
+                "principal": principal,
+                "case": case,
+                "counts": counts,
+                "sources": sources,
+                "active_tab": "sources",
+                "parse_error": f"{filename}: {reason}",
+                "drawer_open": False,
+                "drawer_html": "",
+            },
+            status_code=400,
+        )
+
+    conn = db.get_conn()
+    src_count_row = conn.execute("SELECT COUNT(*) as cnt FROM sources WHERE case_id = ?", (case_id,)).fetchone()
+    if src_count_row and src_count_row["cnt"] >= 5:
+        return rejection("Maximum of 5 sources per case reached.")
+
+    if not upload_file or not hasattr(upload_file, "read"):
+        return rejection("No file provided.")
+
+    content_bytes = await upload_file.read()
+
+    if len(content_bytes) > 200 * 1024:
+        return rejection("File exceeds the 200 KB limit.")
+
+    if len(content_bytes) == 0:
+        return rejection("File is empty.")
+
+    if content_bytes.startswith(b"%PDF-"):
+        return rejection("Binary PDF files are not allowed.")
+
+    if b"\x00" in content_bytes:
+        return rejection("Binary files containing NUL bytes are not allowed.")
+
+    try:
+        text = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return rejection("File is not valid UTF-8.")
+
+    lower_name = filename.lower()
+    if lower_name.endswith(".txt"):
+        kind = "chat"
+    elif lower_name.endswith(".csv"):
+        kind = "tasks"
+    elif lower_name.endswith(".md"):
+        kind = "notes"
+    else:
+        return rejection("Unsupported extension. Only .txt, .csv, and .md files are supported.")
+
+    headers_list = []
+    if kind == "tasks":
+        try:
+            csv_reader = csv.reader(io.StringIO(text))
+            first_row = next(csv_reader, None)
+        except Exception:
+            first_row = None
+        if not first_row or not any(c.strip() for c in first_row):
+            return rejection("CSV file must have a header row.")
+        if len(first_row) > 30:
+            return rejection(f"CSV file has {len(first_row)} columns; maximum allowed is 30.")
+        headers_list = first_row
+
+    parsed_lines = parsers.number_text(text, kind, "dummy")
+    if not parsed_lines:
+        return rejection("File has no non-blank content.")
+
+    new_non_blank = sum(1 for l in parsed_lines if l["text"].strip())
+    curr_non_blank_row = conn.execute("""
+        SELECT COUNT(*) as cnt FROM lines l
+        JOIN sources s ON l.source_id = s.id
+        WHERE s.case_id = ? AND trim(l.text) != ''
+    """, (case_id,)).fetchone()
+    curr_non_blank = curr_non_blank_row["cnt"] if curr_non_blank_row else 0
+    if curr_non_blank + new_non_blank > 1500:
+        return rejection(f"Case would exceed the limit of 1,500 non-blank lines (current: {curr_non_blank}, file: {new_non_blank}).")
+
+    existing_ids = {
+        r["id"] for r in conn.execute(
+            "SELECT id FROM sources WHERE case_id = ?", (case_id,)
+        ).fetchall()
+    }
+    idx = 1
+    while f"c{case_id}s{idx}" in existing_ids:
+        idx += 1
+    source_id = f"c{case_id}s{idx}"
+
+    sha = hashlib.sha256(content_bytes).hexdigest()
+    lines = parsers.number_text(text, kind, source_id)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    labels_json = json.dumps([label_str])
+    headers_json = json.dumps(headers_list)
+
+    conn.execute(
+        "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at, headers) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (source_id, case_id, filename, kind, labels_json, sha, now_iso, headers_json)
+    )
+    for line in lines:
+        conn.execute(
+            "INSERT INTO lines (line_id, source_id, n, text, hash, labels) VALUES (?, ?, ?, ?, ?, ?)",
+            (line["line_id"], source_id, line["n"], line["text"], line["hash"], labels_json)
+        )
+    conn.commit()
+
     return RedirectResponse(url=f"/case/{case_id}/sources", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/case/{case_id}/run", response_class=HTMLResponse)
+def run_case_extraction(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    consent: str | None = Form(None),
+):
+    case = repo.get_case(case_id, principal)
+    if not case or not principal.is_owner or principal.is_demo:
+        return not_found_response()
+
+    if not consent:
+        return templates.TemplateResponse(
+            request=request,
+            name="_run_status.html",
+            context={
+                "request": request,
+                "case_id": case_id,
+                "status": "failed",
+                "step": None,
+                "error": "You must agree to the terms before sending data to the model.",
+                "res": None,
+            },
+        )
+
+    sources = repo.get_sources(case_id, principal)
+    if not sources:
+        return templates.TemplateResponse(
+            request=request,
+            name="_run_status.html",
+            context={
+                "request": request,
+                "case_id": case_id,
+                "status": "failed",
+                "step": None,
+                "error": "No sources uploaded. Upload at least one source file first.",
+                "res": None,
+            },
+        )
+
+    ok, limit_msg = limits.acquire_case_run(case_id, principal.user_id)
+    if not ok:
+        return templates.TemplateResponse(
+            request=request,
+            name="_run_status.html",
+            context={
+                "request": request,
+                "case_id": case_id,
+                "status": "failed",
+                "step": None,
+                "error": limit_msg,
+                "res": None,
+            },
+        )
+
+    conn = db.get_conn()
+    all_lines = conn.execute(
+        """SELECT l.labels FROM lines l JOIN sources s ON l.source_id = s.id WHERE s.case_id = ?""",
+        (case_id,)
+    ).fetchall()
+    groups = set()
+    for row in all_lines:
+        labels = json.loads(row["labels"])
+        groups.add(",".join(sorted(labels)))
+    total_groups = max(1, len(groups))
+    initial_step = f"Reading 1 of {total_groups} label groups"
+
+    EXTRACTION_STATUS[case_id] = {
+        "status": "running",
+        "step": initial_step,
+        "error": None,
+        "res": None,
+    }
+
+    def worker():
+        try:
+            def progress(msg, *args):
+                if case_id in EXTRACTION_STATUS:
+                    EXTRACTION_STATUS[case_id]["step"] = msg
+
+            res = extract.extract_for_case(
+                case_id,
+                mode="cache_then_live",
+                progress_callback=progress,
+            )
+            EXTRACTION_STATUS[case_id] = {
+                "status": "done",
+                "step": "Complete",
+                "error": None,
+                "res": res,
+            }
+        except Exception as e:
+            logging.exception(f"Extraction failed for case {case_id}: {e}")
+            msg = limits.map_exception_to_message(e)
+            EXTRACTION_STATUS[case_id] = {
+                "status": "failed",
+                "step": "Failed",
+                "error": msg,
+                "res": None,
+            }
+        finally:
+            limits.release_case_run(case_id)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="_run_status.html",
+        context={
+            "request": request,
+            "case_id": case_id,
+            "status": "running",
+            "step": initial_step,
+            "error": None,
+            "res": None,
+        },
+    )
+
+
+@app.get("/case/{case_id}/run/status", response_class=HTMLResponse)
+def get_run_status(
+    request: Request,
+    case_id: int,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+):
+    case = repo.get_case(case_id, principal)
+    if not case or not principal.is_owner or principal.is_demo:
+        return not_found_response()
+
+    st = EXTRACTION_STATUS.get(case_id, {})
+    return templates.TemplateResponse(
+        request=request,
+        name="_run_status.html",
+        context={
+            "request": request,
+            "case_id": case_id,
+            "status": st.get("status"),
+            "step": st.get("step"),
+            "error": st.get("error"),
+            "res": st.get("res"),
+        },
+    )
 
 
 @app.get("/case/{case_id}/claims", response_class=HTMLResponse)
@@ -867,6 +1524,7 @@ def claim_source_drawer(
 
     claim = repo.get_claim(case_id, cid, principal)
     if not claim:
+        log_denied(case_id, principal.user_id, request.url.path, "claim", cid)
         return not_found_response()
 
     target_line = line
@@ -879,6 +1537,7 @@ def claim_source_drawer(
     source_id = target_line.split(":")[0]
     src, lines = repo.get_lines_for_source(case_id, source_id, principal)
     if not src or not lines:
+        log_denied(case_id, principal.user_id, request.url.path, "source", source_id)
         return not_found_response()
 
     if not any(l["line_id"] == target_line for l in lines):
@@ -924,6 +1583,7 @@ async def claim_decision(
 
     claim = repo.get_claim(case_id, cid, principal)
     if not claim or not claim.get("identity"):
+        log_denied(case_id, principal.user_id, request.url.path, "claim", cid)
         return not_found_response()
 
     if action == "edit" and not edited_text:
@@ -970,6 +1630,7 @@ def gaps_view(
     gaps = repo.get_gaps(case_id, principal)
     counts = get_nav_counts(case_id, principal)
     allowed_labels = sorted(principal.holds)
+    csv_skipped, csv_skip_msg = verify.check_csv_columns_for_case(case_id)
     return templates.TemplateResponse(
         request=request,
         name="gaps.html",
@@ -982,6 +1643,7 @@ def gaps_view(
             "gaps": gaps,
             "allowed_labels": allowed_labels,
             "active_tab": "gaps",
+            "csv_rule_skipped_message": csv_skip_msg if csv_skipped else None,
         }
     )
 
@@ -999,6 +1661,7 @@ async def answer_gap(
 
     gap = repo.get_gap(case_id, gid, principal)
     if not gap:
+        log_denied(case_id, principal.user_id, request.url.path, "gap", gid)
         return not_found_response()
 
     form = await request.form()
@@ -1148,7 +1811,7 @@ def handover_export_markdown(
     version_n = handover_data["latest_version"]["n"]
     filename = f"handover-{slug}-v{version_n}.md"
 
-    repo.log_export(case_id, principal.user_id, request.url.path, "markdown", version_n)
+    repo.log_export(case_id, principal.user_id, request.url.path, "md", version_n)
 
     return Response(
         content=md_content,

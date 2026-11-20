@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "type": "Owner",
+      "text": "Priya Nair is the single owner of the billing sync after handover.",
+      "subject": "billing sync",
+      "attribute": "owner",
+      "value": "Priya Nair",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s4:003"
+      ]
+    }
+  ],
+  "gaps": []
+}

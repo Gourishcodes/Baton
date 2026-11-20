@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block title %}Access log &middot; {{ case.name }} &middot; Baton{% endblock %}
+
+{% block content %}
+<div style="padding-top:var(--s6);max-width:960px">
+  <div style="margin-bottom:var(--s6)">
+    <h1 class="h1">Access log</h1>
+    <p class="meta" style="margin-top:var(--s1)">Seen means delivered to the person's browser. It does not prove they read it.</p>
+  </div>
+
+  <div style="margin-bottom:var(--s6)">
+    <form method="get" action="/case/{{ case.id }}/access" style="display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap">
+      <label for="label_select" class="lbl" style="font-size:16px;margin:0">Who has seen items labelled</label>
+      <select id="label_select" name="label" class="field field--sm" onchange="this.form.submit()" style="width:auto">
+        {% for l in available_labels %}
+        <option value="{{ l }}" {% if selected_label == l %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn--quiet" style="margin-left:var(--s1)">Filter</button>
+    </form>
+  </div>
+
+  {% if who_has_seen %}
+  <div style="overflow-x:auto;margin-bottom:var(--s8)">
+    <table class="tbl" aria-label="People who have seen items labelled {{ selected_label }}">
+      <thead>
+        <tr>
+          <th>Person</th>
+          <th class="num">Views</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in who_has_seen %}
+        <tr>
+          <td><b>{{ p.name }}</b> <span class="meta">&middot; {{ p.email }}</span></td>
+          <td class="num mono">{{ p.count }}</td>
+          <td><span class="mono">{{ p.last_seen }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="meta" style="margin-bottom:var(--s8)">No one has seen items labelled {{ selected_label }}.</p>
+  {% endif %}
+
+  <div style="margin-bottom:var(--s4)">
+    <h2 class="h2">Full access log</h2>
+    <p class="meta" style="margin-top:var(--s1)">Audit trail of items and labelled views delivered per response.</p>
+  </div>
+
+  {% if logs %}
+  <div style="overflow-x:auto">
+    <table class="tbl" aria-label="Access Log">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Person</th>
+          <th>Action</th>
+          <th>Route</th>
+          <th class="num">Items</th>
+          <th>Labels</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td><span class="mono">{{ l.at_formatted }}</span></td>
+          <td><b>{{ l.user_name }}</b></td>
+          <td><span class="tag">{{ l.action }}</span></td>
+          <td><span class="mono">{{ l.route }}</span></td>
+          <td class="num mono">{{ l.item_count }}</td>
+          <td>
+            {% for lb in l.labels %}
+            {{ m.tag(lb, is_restricted=(lb in ['finance', 'hr'])) }}
+            {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="meta">No entries in the access log yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

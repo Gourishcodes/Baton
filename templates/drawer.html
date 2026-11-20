@@ -11,11 +11,18 @@
   </header>
   <div>
     {% for l in lines %}
-    <div class="srcline{% if l.line_id == target_line_id %} srcline--cited{% endif %}" id="line-{{ l.line_id.replace(':', '-') }}">
+    <div class="srcline{% if target_line_id and l.line_id == target_line_id %} srcline--cited{% endif %}" id="line-{{ l.line_id.replace(':', '-') }}">
       <div class="n">{{ "%03d"|format(l.n) }}</div>
       <div class="t">{{ l.text }}</div>
     </div>
     {% endfor %}
   </div>
+  {% if target_line_id %}
   <footer class="meta">Line IDs are fixed when the file is read: <span class="mono">{{ target_line_id.replace(':', '·') }}</span> always means this line.</footer>
+  {% else %}
+  <footer class="meta">Line IDs are fixed when the file is read.</footer>
+  {% endif %}
 </aside>
+<script>
+document.getElementById('ledger-container')?.classList.add('main-with-drawer');
+</script>

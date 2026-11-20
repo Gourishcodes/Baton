@@ -399,7 +399,7 @@ def test_export_is_logged_in_access_log():
     assert log_md["action"] == "export"
     assert "/case/1/handover.md" in log_md["route"]
     items_md = json.loads(log_md["items"])
-    assert items_md["format"] == "markdown"
+    assert items_md["format"] in ("md", "markdown")
     assert items_md["version"] == 1
 
     log_print = dict(logs[1])
@@ -535,3 +535,144 @@ def test_answered_gap_appears_in_successor_export_and_handover_page():
     assert ans_text in resp_page.text
     sec_page = resp_page.text.split("<h2>Who owns what</h2>")[1].split("<h2>")[0]
     assert ans_text in sec_page
+
+
+def test_cross_label_conflict_hidden_from_successor():
+    """An approved claim has an open conflict with a claim the viewer is NOT cleared for (cross-label).
+    For the successor, the .md, the print page and the handover page must contain no line id,
+    text or note about the hidden claim.
+    The 'Disagrees with the claim at ...' note may appear only when the other claim is visible
+    to that person under access.visible.
+    """
+    _seed_case_1()
+    conn = db.get_conn()
+    run = repo.get_latest_run(1)
+    run_id = run["id"] if run else 1
+
+    # Insert Claim B: finance claim (hidden from successor), citing F1:005
+    cur_b = conn.execute(
+        """INSERT INTO claims (case_id, run_id, type, text, basis, labels, flags, identity)
+           VALUES (1, ?, 'Decision', 'Budget allows 2 full-time notification engineers.', 'sourced', '["finance"]', '{}', 'cross_conflict:B')""",
+        (run_id,)
+    )
+    cid_b = cur_b.lastrowid
+    conn.execute("INSERT INTO claim_cites (claim_id, line_id, valid) VALUES (?, 'F1:005', 1)", (cid_b,))
+
+    # Insert Claim A: team claim (visible to successor), with conflict_with [cid_b]
+    flags_a = json.dumps({"conflict_with": [cid_b]})
+    cur_a = conn.execute(
+        """INSERT INTO claims (case_id, run_id, type, text, basis, labels, flags, identity)
+           VALUES (1, ?, 'Decision', 'Notification service requires 4 engineers immediately.', 'sourced', '["team"]', ?, 'cross_conflict:A')""",
+        (run_id, flags_a)
+    )
+    cid_a = cur_a.lastrowid
+    conn.execute("INSERT INTO claim_cites (claim_id, line_id, valid) VALUES (?, 'C1:026', 1)", (cid_a,))
+
+    # Approve Claim A
+    conn.execute(
+        """INSERT OR REPLACE INTO decisions (identity, case_id, decision, by, at, seeded)
+           VALUES ('cross_conflict:A', 1, 'approved', 'Divya Menon', ?, 1)""",
+        (db.now_iso(),)
+    )
+    conn.commit()
+
+    # Re-create approved version
+    review.create_version(1, approved_by="Divya Menon (seeded)", seeded=True)
+
+    client = TestClient(main.app)
+
+    # 1. As successor: must NOT contain F1:005, F1·005, or "Disagrees with the claim at"
+    login_as(client, "successor")
+
+    resp_md = client.get("/case/1/handover.md")
+    assert resp_md.status_code == 200
+    assert "F1:005" not in resp_md.text
+    assert "F1·005" not in resp_md.text
+    assert "Disagrees with the claim at" not in resp_md.text
+
+    resp_print = client.get("/case/1/handover/print")
+    assert resp_print.status_code == 200
+    assert "F1:005" not in resp_print.text
+    assert "F1·005" not in resp_print.text
+    assert "Disagrees with the claim at" not in resp_print.text
+
+    resp_ho = client.get("/case/1/handover")
+    assert resp_ho.status_code == 200
+    assert "F1:005" not in resp_ho.text
+    assert "F1·005" not in resp_ho.text
+    assert "Disagrees with the claim at" not in resp_ho.text
+
+    # 2. As approver (who holds finance): the note DOES appear
+    login_as(client, "lead")
+    resp_app_md = client.get("/case/1/handover.md")
+    assert resp_app_md.status_code == 200
+    assert "Disagrees with the claim at F1·005. Not yet decided by the approver." in resp_app_md.text
+
+
+def test_approver_md_export_logged_and_shows_in_who_has_seen_hr():
+    """Download approver's .md, assert access_log row with action 'export', format 'md' and version,
+    and assert 'who has seen items labelled hr' finds the approver in the answer.
+    """
+    _seed_case_1()
+    conn = db.get_conn()
+    conn.execute("DELETE FROM access_log")
+    conn.commit()
+
+    client = TestClient(main.app)
+
+    # Approver downloads .md
+    login_as(client, "lead")
+    resp = client.get("/case/1/handover.md")
+    assert resp.status_code == 200
+
+    # Verify access_log row
+    row = conn.execute("SELECT * FROM access_log WHERE case_id = 1 AND action = 'export' ORDER BY id DESC LIMIT 1").fetchone()
+    assert row is not None
+    assert row["action"] == "export"
+    items = json.loads(row["items"])
+    assert items["format"] == "md"
+    assert items["version"] == 1
+    labels_seen = json.loads(row["labels_seen"])
+    assert "hr" in labels_seen
+
+    # Ask "who has seen items labelled hr" via helper and access page
+    from app.access_log import get_who_has_seen_label
+    who_hr = get_who_has_seen_label(1, "hr")
+    assert any(p["name"] == "Divya Menon" for p in who_hr)
+
+    # Check via /case/1/access?label=hr
+    access_resp = client.get("/case/1/access?label=hr")
+    assert access_resp.status_code == 200
+    assert "Divya Menon" in access_resp.text
+
+
+def test_empty_section_text_and_footer_timezone():
+    """1. In build_handover, a section with no approved items prints
+    'No approved items in this section.' across screen, .md and print page.
+    2. Footer includes timezone (UTC) on both timestamps.
+    """
+    _seed_case_1()
+    client = TestClient(main.app)
+    login_as(client, "successor")
+
+    # In demo case, "What depends on what" (dependencies) has no approved items
+    md_resp = client.get("/case/1/handover.md")
+    assert md_resp.status_code == 200
+    assert "No approved items in this section." in md_resp.text
+    assert "## What depends on what\n\nNo approved items in this section." in md_resp.text
+    assert re.search(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC.*?\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC', md_resp.text)
+
+    # Print page
+    pr_resp = client.get("/case/1/handover/print")
+    assert pr_resp.status_code == 200
+    assert "No approved items in this section." in pr_resp.text
+    assert " UTC." in pr_resp.text
+
+    # Handover page
+    ho_resp = client.get("/case/1/handover")
+    assert ho_resp.status_code == 200
+    assert "No approved items in this section." in ho_resp.text
+    assert " UTC." in ho_resp.text
+
+
+

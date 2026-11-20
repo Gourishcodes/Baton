@@ -17,7 +17,7 @@ def _h(text: str) -> str:
 def number_text(text: str, kind: str, source_id: str) -> list[dict]:
     """Parse raw text into numbered lines, identical to tools/number_lines.py."""
     out = []
-    if kind == "csv":
+    if kind in ("csv", "tasks"):
         for n, row in enumerate(csv.DictReader(io.StringIO(text)), 1):
             t = " | ".join(f"{k}={v}" for k, v in row.items() if v not in ("", None))
             out.append({"line_id": f"{source_id}:{n:03d}", "n": n, "text": t, "hash": _h(t)})

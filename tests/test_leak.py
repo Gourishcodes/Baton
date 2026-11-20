@@ -111,6 +111,44 @@ class TestLeakTest:
             with open(template_path, "w", encoding="utf-8") as f:
                 f.write(original)
 
+    def test_leak_test_catches_planted_line_id_in_successor_export(self):
+        """Temporarily put 'F1·005' into the successor's export builder
+        and assert the leak test catches it, then remove it."""
+        orig_build_handover = repo.build_handover
+
+        def patched_build_handover(case_id, principal):
+            res = orig_build_handover(case_id, principal)
+            if principal and principal.role == "successor" and "sections" in res:
+                # Temporarily plant F1·005 into successor's export builder
+                for sec_key in ("actions", "owners", "decisions"):
+                    if sec_key in res["sections"] and res["sections"][sec_key]:
+                        item = res["sections"][sec_key][0]
+                        item["cites"] = list(item.get("cites", [])) + [{"line_id": "F1·005"}]
+                        break
+            return res
+
+        repo.build_handover = patched_build_handover
+        try:
+            results = run_leak_test(verbose=False)
+            assert results["total_found"] > 0, (
+                "Leak test did not catch planted line ID F1·005"
+            )
+            succ_export_findings = [
+                r for r in results["rows"]
+                if r["persona"] == "successor" and "handover" in r["view"] and r["found"] > 0
+            ]
+            assert len(succ_export_findings) > 0, (
+                f"Expected leak findings in successor handover exports, got: {succ_export_findings}"
+            )
+        finally:
+            repo.build_handover = orig_build_handover
+
+        # After removing it, leak test must pass with zero findings
+        clean_results = run_leak_test(verbose=False)
+        assert clean_results["total_found"] == 0, (
+            f"Expected zero findings after removing planted line ID, got {clean_results['total_found']}"
+        )
+
     def test_positive_controls(self):
         """Canaries a persona IS allowed to see DO appear for that persona."""
         results = run_leak_test(verbose=False)
@@ -124,6 +162,17 @@ class TestLeakTest:
         assert all_present, (
             f"Not all expected canaries appeared for lead: "
             f"{[p for p in lead_controls if not p['present']]}"
+        )
+
+        # The approver's views and exports must contain at least one line id of each label
+        lead_line_controls = [p for p in pc if "line id for" in p.get("canary", "")]
+        assert len(lead_line_controls) >= 9, (  # 3 labels * 3 contexts (views, .md, print)
+            f"Expected at least 9 line ID positive controls for lead, got {len(lead_line_controls)}"
+        )
+        all_lines_present = all(p["present"] for p in lead_line_controls)
+        assert all_lines_present, (
+            f"Not all expected line IDs appeared for approver: "
+            f"{[p for p in lead_line_controls if not p['present']]}"
         )
 
     def test_trust_caption_scanned_count_matches_leaktest_report(self):

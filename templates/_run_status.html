@@ -1,0 +1,55 @@
+{% if status == 'running' %}
+<div id="run-status" hx-get="/case/{{ case_id }}/run/status" hx-trigger="every 1s" hx-target="#run-status" hx-swap="outerHTML">
+  <div class="meta" style="font-size:13px;padding:var(--s2) 0">{{ step }}</div>
+</div>
+{% elif status == 'done' %}
+<div id="run-status">
+  <div class="banner" style="margin-bottom:var(--s3)">
+    Handover built: {{ res.claims_count }} claims, {{ res.cited_lines_checked }} cited lines checked, {{ res.conflicts_count }} conflicts, {{ res.gaps_count }} gaps.
+  </div>
+  <div style="display:flex;gap:var(--s3);align-items:center;margin-bottom:var(--s4)">
+    <a href="/case/{{ case_id }}/claims" class="btn btn--primary">View claims</a>
+    <a href="/case/{{ case_id }}/handover" class="btn btn--quiet">View handover</a>
+  </div>
+  <details style="margin-top:var(--s4)">
+    <summary class="meta" style="cursor:pointer">Re-build handover</summary>
+    <form hx-post="/case/{{ case_id }}/run" hx-target="#run-status" hx-swap="outerHTML" style="margin-top:var(--s3)">
+      <div style="margin-bottom:var(--s3)">
+        <label style="display:flex;align-items:flex-start;gap:var(--s2);font-size:13px;line-height:18px;cursor:pointer">
+          <input type="checkbox" name="consent" required style="margin-top:2px">
+          <span>This text is sent to Google's Gemini API. The free tier may log inputs. I am not uploading confidential or personal data.</span>
+        </label>
+      </div>
+      <button type="submit" class="btn btn--quiet">Re-build handover</button>
+    </form>
+  </details>
+</div>
+{% elif status == 'failed' %}
+<div id="run-status">
+  <div class="banner" style="margin-bottom:var(--s3)">{{ error }}</div>
+  <form hx-post="/case/{{ case_id }}/run" hx-target="#run-status" hx-swap="outerHTML">
+    <div style="margin-bottom:var(--s3)">
+      <label style="display:flex;align-items:flex-start;gap:var(--s2);font-size:13px;line-height:18px;cursor:pointer">
+        <input type="checkbox" name="consent" required style="margin-top:2px">
+        <span>This text is sent to Google's Gemini API. The free tier may log inputs. I am not uploading confidential or personal data.</span>
+      </label>
+    </div>
+    <button type="submit" class="btn btn--primary">Build handover</button>
+  </form>
+</div>
+{% else %}
+<div id="run-status">
+  {% if error %}
+  <div class="banner" style="margin-bottom:var(--s3)">{{ error }}</div>
+  {% endif %}
+  <form hx-post="/case/{{ case_id }}/run" hx-target="#run-status" hx-swap="outerHTML">
+    <div style="margin-bottom:var(--s3)">
+      <label style="display:flex;align-items:flex-start;gap:var(--s2);font-size:13px;line-height:18px;cursor:pointer">
+        <input type="checkbox" name="consent" required style="margin-top:2px">
+        <span>This text is sent to Google's Gemini API. The free tier may log inputs. I am not uploading confidential or personal data.</span>
+      </label>
+    </div>
+    <button type="submit" class="btn btn--primary">Build handover</button>
+  </form>
+</div>
+{% endif %}

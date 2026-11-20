@@ -1,0 +1,178 @@
+{
+  "claims": [
+    {
+      "type": "Owner",
+      "text": "Priya takes over the billing sync from 30 Nov",
+      "subject": "billing sync",
+      "attribute": "owner",
+      "value": "Priya Nair",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s1:001"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "moving the sync to a managed queue (QueueKit) because the cron job misses runs when the VM reboots",
+      "subject": "billing sync",
+      "attribute": "stack",
+      "value": "QueueKit",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s1:004"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Cutover date is 12 Dec",
+      "subject": "billing sync",
+      "attribute": "due_date",
+      "value": "2026-12-12",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s1:005"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Vendor renewal for QueueKit is approved at 4 lakh a year",
+      "subject": "QueueKit",
+      "attribute": "budget_monthly",
+      "value": "4 lakh a year",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s1:006"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "cutover moved to 19 Dec because the vendor sandbox is late",
+      "subject": "billing sync",
+      "attribute": "due_date",
+      "value": "2026-12-19",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": {
+        "subject": "billing sync",
+        "attribute": "due_date",
+        "old_value": "2026-12-12"
+      },
+      "cites": [
+        "c12s1:007"
+      ]
+    },
+    {
+      "type": "Risk",
+      "text": "if vm-legacy-2 dies before cutover we lose invoice syncing. Nobody has a backup of the cron config.",
+      "subject": "vm-legacy-2",
+      "attribute": "none",
+      "value": null,
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s1:008"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Set up QueueKit sandbox account",
+      "subject": "Set up QueueKit sandbox account",
+      "attribute": "due_date",
+      "value": "2026-11-25",
+      "owner": "Priya Nair",
+      "due": "2026-11-25",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s2:001"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Back up cron config from vm-legacy-2",
+      "subject": "Back up cron config from vm-legacy-2",
+      "attribute": "due_date",
+      "value": "2026-11-27",
+      "owner": null,
+      "due": "2026-11-27",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s2:002"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Write cutover runbook",
+      "subject": "Write cutover runbook",
+      "attribute": "due_date",
+      "value": "2026-12-05",
+      "owner": "Priya Nair",
+      "due": "2026-12-05",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s2:003"
+      ]
+    },
+    {
+      "type": "NextAction",
+      "text": "Rotate QueueKit API keys after cutover",
+      "subject": "Rotate QueueKit API keys after cutover",
+      "attribute": "due_date",
+      "value": "2026-12-20",
+      "owner": null,
+      "due": "2026-12-20",
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s2:005"
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "question": "Who is covering support on weekends during the cutover?",
+      "why": "Not decided yet.",
+      "cites": [
+        "c12s1:009",
+        "c12s1:010"
+      ]
+    }
+  ]
+}

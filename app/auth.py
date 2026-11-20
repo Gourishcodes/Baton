@@ -381,6 +381,11 @@ def demo_principal(name: str, case_id: int = 1) -> Principal:
         raise ValueError(f"Unknown demo role/persona: {name}")
 
 
+class AlreadyMemberError(Exception):
+    """Raised when a user attempts to redeem an invite for a case they already belong to."""
+    pass
+
+
 def create_invite(case_id: int, role: str, labels: list[str], created_by: int, conn=None) -> str:
     """Create a 7-day single-use invite token."""
     if conn is None:
@@ -418,24 +423,45 @@ def get_invite(token: str, conn=None) -> dict | None:
 
 
 def redeem_invite(token: str, user_id: int, conn=None) -> int:
-    """Redeem an invite for a user. Returns case_id."""
+    """Redeem an invite for a user. Returns case_id.
+    Never changes an existing membership.
+    Refuses any redemption that would leave a case with no owner.
+    """
     if conn is None:
         conn = db.get_conn()
     invite = get_invite(token, conn=conn)
     if not invite:
         raise ValueError("Invalid or expired invite token")
 
+    case_id = invite["case_id"]
+
+    # 1. Redeeming an invite never changes an existing membership.
+    existing = conn.execute(
+        "SELECT * FROM memberships WHERE case_id = ? AND user_id = ?",
+        (case_id, user_id)
+    ).fetchone()
+    if existing:
+        raise AlreadyMemberError("User is already a member of this case")
+
+    # 2. A case always keeps at least one owner.
+    owner_row = conn.execute(
+        "SELECT COUNT(*) as c FROM memberships WHERE case_id = ? AND is_owner = 1",
+        (case_id,)
+    ).fetchone()
+    if not owner_row or owner_row["c"] < 1:
+        raise ValueError("A case must always keep at least one owner.")
+
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     now_iso = datetime.now(timezone.utc).isoformat()
 
     conn.execute(
-        "INSERT OR REPLACE INTO memberships (case_id, user_id, role, is_owner, labels, added_by, added_at) "
+        "INSERT INTO memberships (case_id, user_id, role, is_owner, labels, added_by, added_at) "
         "VALUES (?, ?, ?, 0, ?, ?, ?)",
-        (invite["case_id"], user_id, invite["role"], json.dumps(invite["labels"]), invite["created_by"], now_iso)
+        (case_id, user_id, invite["role"], json.dumps(invite["labels"]), invite["created_by"], now_iso)
     )
     conn.execute("UPDATE invites SET used_at = ? WHERE token_hash = ?", (now_iso, token_hash))
     conn.commit()
-    return invite["case_id"]
+    return case_id
 
 
 def login_as(client, name: str) -> str:

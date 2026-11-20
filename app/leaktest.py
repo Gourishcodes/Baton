@@ -68,8 +68,15 @@ VIEWS = [
     "/case/1/handover.md",
     "/case/1/handover/print",
     "/case/1/approvals",
+    "/case/1/access",
     "/trust",
 ]
+
+
+def _is_token_in_body(kind: str, token: str, body: str) -> bool:
+    if kind == "source_id":
+        return bool(re.search(r'\b' + re.escape(token) + r'\b', body))
+    return token in body
 
 
 def _parse_html_sections(html_text: str) -> dict[str, list[dict]]:
@@ -185,10 +192,14 @@ def run_leak_test(verbose: bool = True):
         results_rows = []
         total_found = 0
         total_scanned = 0
+        canaries_scanned = 0
+        source_ids_scanned = 0
+        line_ids_scanned = 0
         stub_failures = []
         label_failures = []
         count_mismatches = []
         positive_controls = []
+        positive_control_failures = []
 
         # Get all claim IDs for drawer tests
         conn = db.get_conn()
@@ -198,15 +209,45 @@ def run_leak_test(verbose: bool = True):
             ).fetchall()
         ]
 
+        # Collect sources, labels, and their lines
+        all_sources = conn.execute("SELECT id, labels FROM sources WHERE case_id = ?", (case_id,)).fetchall()
+        source_data = {}
+        for s in all_sources:
+            s_id = s["id"]
+            s_labels = set(json.loads(s["labels"]))
+            line_rows = conn.execute("SELECT line_id FROM lines WHERE source_id = ?", (s_id,)).fetchall()
+            lines = [r["line_id"] for r in line_rows]
+            source_data[s_id] = {
+                "labels": s_labels,
+                "lines": lines,
+            }
+        all_labels = sorted(list({lbl for s_info in source_data.values() for lbl in s_info["labels"]}))
+
+        lead_views_html = ""
+
         for persona in personas:
             _set_persona(client, persona)
             holds = access.persona_holds(persona)
 
             # Canaries this persona must NOT see
-            forbidden = []
-            for c in CANARIES:
-                if c["group"] not in holds:
-                    forbidden.append(c["text"])
+            forbidden_canaries = [c["text"] for c in CANARIES if c["group"] not in holds]
+
+            # Sources this persona does NOT hold
+            forbidden_source_ids = [
+                s_id for s_id, s_info in source_data.items()
+                if not (s_info["labels"] <= holds)
+            ]
+
+            # Build structured forbidden tokens: list of (kind, token)
+            # kind: "canary", "source_id", "line_id"
+            forbidden_tokens = []
+            for c_text in forbidden_canaries:
+                forbidden_tokens.append(("canary", c_text))
+            for sid in forbidden_source_ids:
+                forbidden_tokens.append(("source_id", sid))
+                for lid in source_data[sid]["lines"]:
+                    forbidden_tokens.append(("line_id", lid))
+                    forbidden_tokens.append(("line_id", lid.replace(":", "·")))
 
             # Canaries this persona IS allowed to see (positive control)
             allowed = []
@@ -220,19 +261,31 @@ def run_leak_test(verbose: bool = True):
             # 1. Scan all views (full page and HTMX partial)
             for view in VIEWS:
                 resp = client.get(view)
+                if view == "/case/1/access":
+                    if persona != "lead" and resp.status_code != 404:
+                        stub_failures.append(f"Non-owner {persona} received {resp.status_code} on {view} instead of 404")
+                    elif persona == "lead" and resp.status_code != 200:
+                        stub_failures.append(f"Owner {persona} received {resp.status_code} on {view} instead of 200")
                 if resp.status_code != 404:
                     body = resp.text
                     persona_html += body
                     found_count = 0
-                    for canary in forbidden:
+                    for kind, tok in forbidden_tokens:
                         total_scanned += 1
-                        if canary in body:
+                        if kind == "canary":
+                            canaries_scanned += 1
+                        elif kind == "source_id":
+                            source_ids_scanned += 1
+                        elif kind == "line_id":
+                            line_ids_scanned += 1
+
+                        if _is_token_in_body(kind, tok, body):
                             found_count += 1
                             total_found += 1
                     results_rows.append({
                         "persona": persona,
                         "view": view,
-                        "forbidden_count": len(forbidden),
+                        "forbidden_count": len(forbidden_tokens),
                         "found": found_count,
                         "status_code": resp.status_code,
                     })
@@ -244,15 +297,22 @@ def run_leak_test(verbose: bool = True):
                         hbody = htmx_resp.text
                         persona_html += hbody
                         h_found = 0
-                        for canary in forbidden:
+                        for kind, tok in forbidden_tokens:
                             total_scanned += 1
-                            if canary in hbody:
+                            if kind == "canary":
+                                canaries_scanned += 1
+                            elif kind == "source_id":
+                                source_ids_scanned += 1
+                            elif kind == "line_id":
+                                line_ids_scanned += 1
+
+                            if _is_token_in_body(kind, tok, hbody):
                                 h_found += 1
                                 total_found += 1
                         results_rows.append({
                             "persona": persona,
                             "view": f"{view} (HX)",
-                            "forbidden_count": len(forbidden),
+                            "forbidden_count": len(forbidden_tokens),
                             "found": h_found,
                             "status_code": htmx_resp.status_code,
                         })
@@ -263,18 +323,28 @@ def run_leak_test(verbose: bool = True):
                 body = resp.text
                 persona_html += body
                 found_count = 0
-                for canary in forbidden:
+                for kind, tok in forbidden_tokens:
                     total_scanned += 1
-                    if canary in body:
+                    if kind == "canary":
+                        canaries_scanned += 1
+                    elif kind == "source_id":
+                        source_ids_scanned += 1
+                    elif kind == "line_id":
+                        line_ids_scanned += 1
+
+                    if _is_token_in_body(kind, tok, body):
                         found_count += 1
                         total_found += 1
                 results_rows.append({
                     "persona": persona,
                     "view": f"/case/1/claims/{cid}/source",
-                    "forbidden_count": len(forbidden),
+                    "forbidden_count": len(forbidden_tokens),
                     "found": found_count,
                     "status_code": resp.status_code,
                 })
+
+            if persona == "lead":
+                lead_views_html = persona_html
 
             # 3. Hidden claim 404 vs made-up ID 404 must be identical
             principal = demo_principal(persona, case_id=case_id)
@@ -425,6 +495,55 @@ def run_leak_test(verbose: bool = True):
                     "present": True,
                 })
 
+        # Approver line ID positive controls: views and exports must contain at least one line id of each label
+        for label in all_labels:
+            label_lids = [
+                lid for s_info in source_data.values()
+                if label in s_info["labels"]
+                for lid in s_info["lines"]
+            ]
+            views_has_line = any(
+                lid in lead_views_html or lid.replace(":", "·") in lead_views_html
+                for lid in label_lids
+            )
+            positive_controls.append({
+                "persona": f"lead (views, label: {label})",
+                "canary": f"line id for {label}",
+                "present": views_has_line,
+            })
+            if not views_has_line:
+                positive_control_failures.append(
+                    f"Approver views missing line id for label '{label}'"
+                )
+
+            md_has_line = any(
+                lid in lead_md or lid.replace(":", "·") in lead_md
+                for lid in label_lids
+            )
+            positive_controls.append({
+                "persona": f"lead (.md export, label: {label})",
+                "canary": f"line id for {label}",
+                "present": md_has_line,
+            })
+            if not md_has_line:
+                positive_control_failures.append(
+                    f"Approver .md export missing line id for label '{label}'"
+                )
+
+            print_has_line = any(
+                lid in lead_print or lid.replace(":", "·") in lead_print
+                for lid in label_lids
+            )
+            positive_controls.append({
+                "persona": f"lead (print export, label: {label})",
+                "canary": f"line id for {label}",
+                "present": print_has_line,
+            })
+            if not print_has_line:
+                positive_control_failures.append(
+                    f"Approver print export missing line id for label '{label}'"
+                )
+
         # Positive controls for finance_ops exports (approved finance canaries)
         _set_persona(client, "finance_ops")
         finance_md = client.get("/case/1/handover.md").text
@@ -502,11 +621,15 @@ def run_leak_test(verbose: bool = True):
         _last_leak_results = {
             "total_found": total_found,
             "total_scanned": total_scanned,
+            "canaries_scanned": canaries_scanned,
+            "source_ids_scanned": source_ids_scanned,
+            "line_ids_scanned": line_ids_scanned,
             "rows": results_rows,
             "stub_failures": stub_failures,
             "label_failures": label_failures,
             "count_mismatches": count_mismatches,
             "positive_controls": positive_controls,
+            "positive_control_failures": positive_control_failures,
             "equivalence_failures": equivalence_failures,
             "escaping_failures": escaping_failures,
         }
@@ -539,6 +662,16 @@ def format_report(results: dict) -> str:
     lines.append(
         f"\nStrings scanned: {results['total_scanned']}"
     )
+    if "line_ids_scanned" in results:
+        lines.append(
+            f"  Canaries scanned: {results.get('canaries_scanned', 0)}"
+        )
+        lines.append(
+            f"  Source IDs scanned: {results.get('source_ids_scanned', 0)}"
+        )
+        lines.append(
+            f"  Line IDs scanned: {results.get('line_ids_scanned', 0)}"
+        )
     lines.append(
         f"Forbidden strings found: {results['total_found']}"
     )
@@ -602,7 +735,17 @@ def format_report(results: dict) -> str:
         lines.append(f"\nPositive controls: {present} of {len(pc)} expected canaries present")
         for p in pc:
             mark = "+" if p["present"] else "-"
-            lines.append(f"  [{mark}] {p['persona']}: canary present={p['present']}")
+            canary_text = p.get("canary", "canary")
+            if "line id" in canary_text:
+                lines.append(f"  [{mark}] {p['persona']}: {canary_text} present={p['present']}")
+            else:
+                lines.append(f"  [{mark}] {p['persona']}: canary present={p['present']}")
+
+    pc_failures = results.get("positive_control_failures", [])
+    if pc_failures:
+        lines.append(f"\nPositive control checks: {len(pc_failures)} failures")
+        for f in pc_failures:
+            lines.append(f"  - {f}")
 
     lines.append("")
     lines.append("=" * 70)
@@ -622,5 +765,6 @@ if __name__ == "__main__":
         + len(results.get("count_mismatches", []))
         + len(results.get("equivalence_failures", []))
         + len(results.get("escaping_failures", []))
+        + len(results.get("positive_control_failures", []))
     )
     sys.exit(0 if failures == 0 else 1)

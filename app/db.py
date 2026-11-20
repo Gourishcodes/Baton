@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS sources (
     kind TEXT NOT NULL,
     labels TEXT NOT NULL,  -- JSON array
     sha256 TEXT NOT NULL,
-    uploaded_at TEXT NOT NULL
+    uploaded_at TEXT NOT NULL,
+    headers TEXT DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS lines (
@@ -208,6 +209,18 @@ CREATE TABLE IF NOT EXISTS access_log (
     labels_seen TEXT
 );
 
+CREATE TABLE IF NOT EXISTS run_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    case_id INTEGER,
+    at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS provider_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(email, ip, at);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id);
@@ -242,6 +255,11 @@ def get_conn() -> sqlite3.Connection:
         _local.conn.executescript(SCHEMA)
         try:
             _local.conn.execute("ALTER TABLE cases ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+            _local.conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            _local.conn.execute("ALTER TABLE sources ADD COLUMN headers TEXT DEFAULT '[]'")
             _local.conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -303,9 +321,19 @@ def load_demo_case(data_dir: str = DATA) -> int:
         sha = file_sha256(filepath)
         labels_json = json.dumps(sorted(src["labels"]))
 
+        headers = []
+        if src["kind"] == "csv" or src["file"].endswith(".csv"):
+            try:
+                with open(filepath, encoding="utf-8") as f_csv:
+                    r = csv.reader(f_csv)
+                    headers = next(r)
+            except Exception:
+                headers = []
+        headers_json = json.dumps(headers)
+
         conn.execute(
-            "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (src["id"], 1, src["file"], src["kind"], labels_json, sha, now_iso())
+            "INSERT INTO sources (id, case_id, filename, kind, labels, sha256, uploaded_at, headers) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (src["id"], 1, src["file"], src["kind"], labels_json, sha, now_iso(), headers_json)
         )
 
         lines = parsers.number_file(filepath, src["kind"], src["id"])
@@ -317,6 +345,27 @@ def load_demo_case(data_dir: str = DATA) -> int:
 
     conn.commit()
     return 1
+
+
+def delete_case(case_id: int) -> None:
+    """Delete a case and every associated row across all tables (ROUND3_SPEC 4.1)."""
+    conn = get_conn()
+    conn.execute("DELETE FROM lines WHERE source_id IN (SELECT id FROM sources WHERE case_id = ?)", (case_id,))
+    conn.execute("DELETE FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE case_id = ?)", (case_id,))
+    conn.execute("DELETE FROM gap_cites WHERE gap_id IN (SELECT id FROM gaps WHERE case_id = ?)", (case_id,))
+    conn.execute("DELETE FROM sources WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM claims WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM gaps WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM runs WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM conflicts WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM decisions WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM versions WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM acknowledgements WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM access_log WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM invites WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM memberships WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
+    conn.commit()
 
 
 def insert_run(case_id: int, mode: str = "fixture", provider: str = "fixture",

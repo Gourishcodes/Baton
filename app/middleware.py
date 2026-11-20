@@ -10,6 +10,7 @@ Implements SPEC section 7 and ROUND3_SPEC sections 1.2, 1.4:
 """
 import json
 import os
+import re
 import sys
 from urllib.parse import urlparse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -122,7 +123,24 @@ class WireCheckMiddleware(BaseHTTPMiddleware):
 
         # Replace wire strip placeholder if present (HTML only)
         if "text/html" in content_type and "<!-- WIRE_STRIP -->" in body_str:
-            if principal and principal.role == "approver" and {"team", "finance", "hr"}.issubset(principal.holds):
+            case_match = re.search(r"^/case/(\d+)", request.url.path)
+            is_other_case = False
+            if case_match and int(case_match.group(1)) != 1:
+                is_other_case = True
+            elif not case_match and principal and getattr(principal, "case_id", 1) != 1:
+                is_other_case = True
+
+            if is_other_case:
+                display_role = principal.role.capitalize() if principal else "Viewer"
+                clearance_str = ", ".join(sorted(principal.holds)) if principal and principal.holds else "none"
+                strip = (
+                    '<div class="wire" style="margin-top:var(--s8)">'
+                    '<span class="label">Wire check</span>'
+                    '<span>The planted-string scan covers the demo case only. On this case, restricted text is protected by the access function.</span>'
+                    f'<span>Role: {display_role} &middot; clearance: {clearance_str}</span>'
+                    '</div>'
+                )
+            elif principal and principal.role == "approver" and {"team", "finance", "hr"}.issubset(principal.holds):
                 strip = (
                     '<div class="wire" style="margin-top:var(--s8)">'
                     '<span class="label">Wire check</span>'

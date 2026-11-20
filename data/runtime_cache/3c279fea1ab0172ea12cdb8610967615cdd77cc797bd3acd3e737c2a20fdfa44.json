@@ -1,0 +1,53 @@
+{
+  "claims": [
+    {
+      "type": "Decision",
+      "text": "The annual cap for the QueueKit renewal is 3 lakh.",
+      "subject": "QueueKit renewal",
+      "attribute": "budget_monthly",
+      "value": "3 lakh",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s3:001"
+      ]
+    },
+    {
+      "type": "Owner",
+      "text": "Dev Malhotra is the CFO who provides sign-off for anything above 3 lakh.",
+      "subject": "QueueKit renewal",
+      "attribute": "approver",
+      "value": "Dev Malhotra",
+      "owner": "Dev Malhotra",
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s3:002"
+      ]
+    },
+    {
+      "type": "Decision",
+      "text": "Current cloud spend for the legacy VM is about 18,000 a month and ends after cutover.",
+      "subject": "legacy VM cloud spend",
+      "attribute": "budget_monthly",
+      "value": "18,000 a month",
+      "owner": null,
+      "due": null,
+      "event_date": null,
+      "recurring": false,
+      "not_on_task_board": false,
+      "supersedes": null,
+      "cites": [
+        "c12s3:003"
+      ]
+    }
+  ],
+  "gaps": []
+}

@@ -13,8 +13,20 @@
     Baton
   </a>
 
-  <h1 class="h1" style="margin-bottom:var(--s4)">You've been invited</h1>
+  <h1 class="h1" style="margin-bottom:var(--s4)">Invitation</h1>
 
+  {% if error %}
+  <div class="banner" style="margin-bottom:var(--s4);border-color:var(--conflict);color:var(--conflict)">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {% if already_member %}
+  <div class="banner" style="margin-bottom:var(--s6)">
+    You are already a member of this case.
+  </div>
+  <a href="/case/{{ invite.case_id }}/claims" class="btn btn--primary">View case</a>
+  {% elif user %}
   <div class="banner" style="margin-bottom:var(--s6)">
     You have been invited to join as <strong>{{ invite.role|capitalize }}</strong> with clearance:
     <div style="margin-top:var(--s2)">
@@ -25,13 +37,63 @@
   </div>
 
   <p style="margin-bottom:var(--s6);font-size:14px;line-height:22px">
-    Sign in to an existing account or create a new one to accept this invitation.
+    Signed in as <strong>{{ user.name }}</strong> ({{ user.email }}).
   </p>
 
-  <div style="display:flex;gap:var(--s3)">
-    <a href="/login?invite={{ token }}" class="btn btn--primary" style="flex:1">Sign in to accept</a>
-    <a href="/signup?invite={{ token }}" class="btn" style="flex:1">Create account</a>
+  <form method="post" action="/invite/{{ token }}/accept">
+    <button type="submit" class="btn btn--primary" style="width:100%">Join as {{ invite.role|capitalize }}</button>
+  </form>
+  {% else %}
+  <div class="banner" style="margin-bottom:var(--s6)">
+    You have been invited to join as <strong>{{ invite.role|capitalize }}</strong> with clearance:
+    <div style="margin-top:var(--s2)">
+      {% for l in invite.labels %}
+      <span class="tag tag--{{ l }}">{{ l }}</span>
+      {% endfor %}
+    </div>
   </div>
+
+  <div style="margin-bottom:var(--s8)">
+    <h2 class="h2" style="margin-bottom:var(--s3)">Create account</h2>
+    <form method="post" action="/signup">
+      <input type="hidden" name="invite" value="{{ token }}">
+      <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+        Full name
+      </label>
+      <input type="text" name="name" required class="field field--sm" style="width:100%;margin-bottom:var(--s3)">
+
+      <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+        Email
+      </label>
+      <input type="email" name="email" required class="field field--sm" style="width:100%;margin-bottom:var(--s3)">
+
+      <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+        Password (at least 10 characters)
+      </label>
+      <input type="password" name="password" minlength="10" required class="field field--sm" style="width:100%;margin-bottom:var(--s4)">
+
+      <button type="submit" class="btn btn--primary" style="width:100%">Create account & join</button>
+    </form>
+  </div>
+
+  <div style="border-top:1px solid var(--rule);padding-top:var(--s6)">
+    <h2 class="h2" style="margin-bottom:var(--s3)">Or sign in to an existing account</h2>
+    <form method="post" action="/login">
+      <input type="hidden" name="invite" value="{{ token }}">
+      <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+        Email
+      </label>
+      <input type="email" name="email" required class="field field--sm" style="width:100%;margin-bottom:var(--s3)">
+
+      <label style="display:block;font:500 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin-bottom:var(--s1)">
+        Password
+      </label>
+      <input type="password" name="password" required class="field field--sm" style="width:100%;margin-bottom:var(--s4)">
+
+      <button type="submit" class="btn" style="width:100%">Sign in & join</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 </body>
 </html>

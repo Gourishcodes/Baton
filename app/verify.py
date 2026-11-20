@@ -291,6 +291,61 @@ def detect_conflicts(run_id: int, case_id: int, conn=None):
     conn.commit()
 
 
+ASSIGNEE_COL_NAMES = {"assignee", "owner", "assigned to", "assigned_to"}
+STATUS_COL_NAMES = {"status", "state"}
+TASK_ID_COL_NAMES = {"id", "task id", "task_id", "task", "key", "number", "no"}
+TITLE_COL_NAMES = {"title", "name", "summary", "task", "description"}
+
+
+def get_csv_headers(csv_source, conn) -> list[str]:
+    headers = []
+    if "headers" in csv_source.keys() and csv_source["headers"]:
+        try:
+            headers = json.loads(csv_source["headers"])
+        except Exception:
+            headers = []
+    if not headers:
+        lines = conn.execute("SELECT text FROM lines WHERE source_id = ?", (csv_source["id"],)).fetchall()
+        for line in lines:
+            for part in line["text"].split(" | "):
+                if "=" in part:
+                    k, _ = part.split("=", 1)
+                    headers.append(k.strip())
+        headers = list(dict.fromkeys(headers))
+    return headers
+
+
+def check_csv_columns_for_case(case_id: int, conn=None) -> tuple[bool, str | None]:
+    """Check if any CSV/tasks source in the case is missing assignee or status columns.
+    Returns (is_missing, message).
+    """
+    if conn is None:
+        conn = db.get_conn()
+    csv_sources = conn.execute(
+        "SELECT id, filename, headers FROM sources WHERE case_id = ? AND kind IN ('csv', 'tasks')",
+        (case_id,)
+    ).fetchall()
+    if not csv_sources:
+        return False, None
+
+    for csv_source in csv_sources:
+        headers = get_csv_headers(csv_source, conn)
+        if not headers:
+            continue
+        normalized = {h.strip().lower() for h in headers}
+        has_assignee = any(cand in normalized for cand in ASSIGNEE_COL_NAMES)
+        has_status = any(cand in normalized for cand in STATUS_COL_NAMES)
+        if not has_assignee or not has_status:
+            missing = []
+            if not has_assignee:
+                missing.append("assignee")
+            if not has_status:
+                missing.append("status")
+            return True, f"Task CSV '{csv_source['filename']}' is missing {' and '.join(missing)} column; 'Who owns this?' gaps rule was skipped."
+
+    return False, None
+
+
 def generate_deterministic_gaps(case_id: int, run_id: int, conn=None) -> list[int]:
     """Generate deterministic gaps from the task CSV: any row with an empty
     assignee that is not Done or Cancelled becomes a gap.
@@ -303,24 +358,13 @@ def generate_deterministic_gaps(case_id: int, run_id: int, conn=None) -> list[in
     if conn is None:
         conn = db.get_conn()
 
-    # Find the CSV source
-    csv_source = conn.execute(
-        "SELECT id FROM sources WHERE case_id = ? AND kind = 'csv'", (case_id,)
-    ).fetchone()
-
-    if not csv_source:
-        return []
-
-    source_id = csv_source["id"]
-    source_labels = conn.execute(
-        "SELECT labels FROM sources WHERE id = ?", (source_id,)
-    ).fetchone()
-    labels = json.loads(source_labels["labels"])
-
-    # Get all lines from this CSV source
-    csv_lines = conn.execute(
-        "SELECT line_id, text FROM lines WHERE source_id = ?", (source_id,)
+    csv_sources = conn.execute(
+        "SELECT id, filename, labels, headers FROM sources WHERE case_id = ? AND kind IN ('csv', 'tasks')",
+        (case_id,)
     ).fetchall()
+
+    if not csv_sources:
+        return []
 
     # Find existing model gap cite line_ids for this run
     existing_gap_lines = set()
@@ -336,34 +380,81 @@ def generate_deterministic_gaps(case_id: int, run_id: int, conn=None) -> list[in
             existing_gap_lines.add(c["line_id"])
 
     gap_ids = []
-    for line in csv_lines:
-        text = line["text"]
-        # Parse the pipe-separated key=value format
-        fields = {}
-        for part in text.split(" | "):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                fields[k.strip()] = v.strip()
+    for csv_source in csv_sources:
+        headers = get_csv_headers(csv_source, conn)
+        norm_to_orig = {h.strip().lower(): h for h in headers}
+        assignee_col = next((norm_to_orig[c] for c in ASSIGNEE_COL_NAMES if c in norm_to_orig), None)
+        status_col = next((norm_to_orig[c] for c in STATUS_COL_NAMES if c in norm_to_orig), None)
+        id_col = next((norm_to_orig[c] for c in TASK_ID_COL_NAMES if c in norm_to_orig), None)
+        title_col = next((norm_to_orig[c] for c in TITLE_COL_NAMES if c in norm_to_orig and (not id_col or norm_to_orig[c] != id_col)), None)
 
-        task_id = fields.get("id", "")
-        title = fields.get("title", "")
-        assignee = fields.get("assignee", "")
-        status = fields.get("status", "")
+        # If either assignee or status is missing, skip the rule
+        if not assignee_col or not status_col:
+            continue
 
-        if assignee == "" and status not in ("Done", "Cancelled"):
-            # Check if a model gap already cites this line
-            if line["line_id"] in existing_gap_lines:
-                continue
+        source_id = csv_source["id"]
+        source_labels = conn.execute(
+            "SELECT labels FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        labels = json.loads(source_labels["labels"]) if source_labels else ["team"]
 
-            question = f"Who owns {task_id}: {title}?"
-            gap_id = db.insert_gap(case_id, run_id, {
-                "question": question,
-                "why": f"Task {task_id} has no assignee and is not Done or Cancelled.",
-                "labels": labels,
-                "cites": [line["line_id"]],
-                "status": "open",
-            })
-            gap_ids.append(gap_id)
+        csv_lines = conn.execute(
+            "SELECT line_id, text FROM lines WHERE source_id = ?", (source_id,)
+        ).fetchall()
+
+        for line in csv_lines:
+            text = line["text"]
+            fields = {}
+            for part in text.split(" | "):
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    fields[k.strip().lower()] = v.strip()
+
+            assignee_val = fields.get(assignee_col.lower(), "")
+            status_val = fields.get(status_col.lower(), "")
+
+            if not assignee_val:
+                for cand in ASSIGNEE_COL_NAMES:
+                    if cand in fields:
+                        assignee_val = fields[cand]
+                        break
+            if not status_val:
+                for cand in STATUS_COL_NAMES:
+                    if cand in fields:
+                        status_val = fields[cand]
+                        break
+
+            is_closed = status_val.lower() in ("done", "cancelled", "canceled", "closed", "complete", "completed")
+
+            if assignee_val == "" and not is_closed:
+                if line["line_id"] in existing_gap_lines:
+                    continue
+
+                task_id = fields.get(id_col.lower() if id_col else "id", "")
+                title = fields.get(title_col.lower() if title_col else "title", "")
+                if not task_id and not title:
+                    non_status = [v for k, v in fields.items() if k not in STATUS_COL_NAMES and k not in ASSIGNEE_COL_NAMES]
+                    title = non_status[0] if non_status else "task"
+
+                if task_id and title and task_id != title:
+                    question = f"Who owns {task_id}: {title}?"
+                    why = f"Task {task_id} has no assignee and is not Done or Cancelled."
+                elif task_id or title:
+                    name = task_id or title
+                    question = f"Who owns {name}?"
+                    why = f"Task {name} has no assignee and is not Done or Cancelled."
+                else:
+                    question = "Who owns this task?"
+                    why = "Task has no assignee and is not Done or Cancelled."
+
+                gap_id = db.insert_gap(case_id, run_id, {
+                    "question": question,
+                    "why": why,
+                    "labels": labels,
+                    "cites": [line["line_id"]],
+                    "status": "open",
+                })
+                gap_ids.append(gap_id)
 
     return gap_ids
 
@@ -497,22 +588,38 @@ def run_verification_pipeline(case_id: int, run_id: int, call_label_sets: dict[s
 
     # 1. Validate cites for all claims in this run
     claims = conn.execute(
-        "SELECT id, labels FROM claims WHERE run_id = ? AND case_id = ?",
+        "SELECT id, labels, flags FROM claims WHERE run_id = ? AND case_id = ?",
         (run_id, case_id)
     ).fetchall()
 
     for claim in claims:
-        claim_labels = set(json.loads(claim["labels"]))
-        # Find which call label set this claim belongs to
-        call_labels = claim_labels  # Default: use claim's own labels
-        for ls_key, ls_set in call_label_sets.items():
-            if claim_labels.issubset(ls_set) or claim_labels == ls_set:
-                call_labels = ls_set
-                break
+        flags = json.loads(claim["flags"] or "{}")
+        call_ls_key = flags.get("call_label_set")
+        if call_ls_key and call_ls_key in call_label_sets:
+            call_labels = call_label_sets[call_ls_key]
+        else:
+            claim_labels = set(json.loads(claim["labels"]))
+            call_labels = claim_labels  # Default: use claim's own labels
+            for ls_key, ls_set in call_label_sets.items():
+                if claim_labels.issubset(ls_set) or claim_labels == ls_set:
+                    call_labels = ls_set
+                    break
 
         validate_cites(claim["id"], call_labels, conn)
         assign_basis(claim["id"], conn)
         compute_identity(claim["id"], conn)
+
+        # Update claim labels to call_labels unioned with valid cites only
+        valid_cites = conn.execute(
+            "SELECT line_id FROM claim_cites WHERE claim_id = ? AND valid = 1",
+            (claim["id"],)
+        ).fetchall()
+        final_labels = set(call_labels)
+        for vc in valid_cites:
+            lrow = conn.execute("SELECT labels FROM lines WHERE line_id = ?", (vc["line_id"],)).fetchone()
+            if lrow:
+                final_labels.update(json.loads(lrow["labels"]))
+        conn.execute("UPDATE claims SET labels = ? WHERE id = ?", (json.dumps(sorted(final_labels)), claim["id"]))
 
     # 1b. Drop NextAction claims citing only closed tasks
     drop_closed_task_claims(case_id, run_id, conn)

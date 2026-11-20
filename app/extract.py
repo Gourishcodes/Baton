@@ -8,20 +8,59 @@ Cache management with sha256 keys in demo_cache/.
 import hashlib
 import json
 import os
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import db, parsers, verify
+from . import db, limits, parsers, verify
 from .llm.base import Provider
 from .llm.gemini import GeminiProvider
 from .llm.openai_compat import OpenAICompatProvider
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DEMO_CACHE_DIR = os.path.join(ROOT, "demo_cache")
+DEFAULT_DATA_DIR = os.environ.get("BATON_DATA_DIR") or os.path.join(ROOT, "data")
+RUNTIME_CACHE_DIR = os.environ.get("RUNTIME_CACHE_DIR") or os.path.join(DEFAULT_DATA_DIR, "runtime_cache")
 FIXTURES_DIR = os.path.join(ROOT, "tests", "fixtures")
 
 PROMPT_VERSION = "v6"
 SCHEMA_VERSION = "v1"
+
+
+class RunResult(int):
+    """Integer run_id with counts attributes, compatible with both int and dict access."""
+    claims_count: int
+    cited_lines_checked: int
+    conflicts_count: int
+    gaps_count: int
+    run_id: int
+
+    def __new__(cls, run_id: int, claims_count: int = 0, cited_lines_checked: int = 0, conflicts_count: int = 0, gaps_count: int = 0):
+        obj = super().__new__(cls, run_id)
+        obj.run_id = run_id
+        obj.claims_count = claims_count
+        obj.cited_lines_checked = cited_lines_checked
+        obj.conflicts_count = conflicts_count
+        obj.gaps_count = gaps_count
+        return obj
+
+    def __getitem__(self, key):
+        if key == "run_id":
+            return self.run_id
+        if key == "claims_count":
+            return self.claims_count
+        if key == "cited_lines_checked":
+            return self.cited_lines_checked
+        if key == "conflicts_count":
+            return self.conflicts_count
+        if key == "gaps_count":
+            return self.gaps_count
+        raise KeyError(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 # --- Pydantic Schema for Extraction Output (SPEC 5.3) ---
@@ -114,8 +153,15 @@ def compute_cache_key(label_set: str, lines: list[dict]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+CUSTOM_PRIMARY_PROVIDER: Provider | None = None
+CUSTOM_FALLBACK_PROVIDER: Provider | None = None
+
+
 def get_providers() -> tuple[Provider | None, Provider | None]:
     """Instantiate primary and fallback providers based on environment."""
+    if CUSTOM_PRIMARY_PROVIDER is not None or CUSTOM_FALLBACK_PROVIDER is not None:
+        return CUSTOM_PRIMARY_PROVIDER, CUSTOM_FALLBACK_PROVIDER
+
     provider_name = os.environ.get("LLM_PROVIDER", "gemini").lower()
 
     primary: Provider | None = None
@@ -169,7 +215,7 @@ def extract_for_label_set(
     mode: str | None = None,
     primary_provider: Provider | None = None,
     fallback_provider: Provider | None = None,
-    cache_dir: str = DEMO_CACHE_DIR,
+    cache_dir: str | None = None,
 ) -> dict:
     """Execute extraction for a single label set.
 
@@ -180,10 +226,11 @@ def extract_for_label_set(
     """
     mode = (mode or os.environ.get("LLM_MODE", "cache_only")).lower()
     cache_key = compute_cache_key(label_set, lines)
+    target_cache_dir = cache_dir or RUNTIME_CACHE_DIR
 
     # 1. Check cache if permitted
     if mode in ("cache_only", "cache_then_live"):
-        cached = load_from_cache(cache_key, cache_dir)
+        cached = load_from_cache(cache_key, target_cache_dir)
         if cached is not None:
             return cached
 
@@ -198,6 +245,10 @@ def extract_for_label_set(
         )
 
     # 3. Live call path
+    can_call, cap_err = limits.check_daily_call_cap()
+    if not can_call:
+        raise RuntimeError(cap_err)
+
     if primary_provider is None or fallback_provider is None:
         p, f = get_providers()
         primary_provider = primary_provider or p
@@ -206,49 +257,65 @@ def extract_for_label_set(
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(label_set=label_set)
     user_prompt = format_user_prompt(lines)
 
+    primary_err = None
     # Try primary provider (attempt + 1 retry)
     for attempt in range(2):
         try:
+            if hasattr(primary_provider, "api_key") and not primary_provider.api_key:
+                raise ValueError("GEMINI_API_KEY is not configured")
+            limits.throttle_provider_call()
             raw = primary_provider.generate_json(system_prompt, user_prompt, EXTRACTION_SCHEMA)
+            limits.record_provider_call()
             validated = ExtractionOutput.model_validate(raw)
             result = validated.model_dump()
-            save_to_cache(cache_key, result, cache_dir)
+            save_to_cache(cache_key, result, target_cache_dir)
             return result
         except Exception as e:
-            if attempt == 1:
-                primary_err = e
+            primary_err = e
+            if "not configured" in str(e).lower():
+                break
 
     # Fallback to secondary provider (attempt + 1 retry)
     if fallback_provider:
+        fallback_err = None
         for attempt in range(2):
             try:
+                if hasattr(fallback_provider, "api_key") and not fallback_provider.api_key:
+                    raise ValueError("FALLBACK_API_KEY is not configured")
+                limits.throttle_provider_call()
                 raw = fallback_provider.generate_json(system_prompt, user_prompt, EXTRACTION_SCHEMA)
+                limits.record_provider_call()
                 validated = ExtractionOutput.model_validate(raw)
                 result = validated.model_dump()
-                save_to_cache(cache_key, result, cache_dir)
+                save_to_cache(cache_key, result, target_cache_dir)
                 return result
             except Exception as e:
-                if attempt == 1:
-                    raise RuntimeError(
-                        f"Extraction failed for label set '{label_set}'. "
-                        f"Primary error: {primary_err}. Fallback error: {e}."
-                    ) from e
+                fallback_err = e
+                if "not configured" in str(e).lower():
+                    break
+        raise RuntimeError(
+            f"Extraction failed for label set '{label_set}'. "
+            f"Primary error: {primary_err}. Fallback error: {fallback_err}."
+        ) from fallback_err
 
     raise RuntimeError(
         f"Extraction failed for label set '{label_set}'. Primary error: {primary_err}"
-    )
+    ) from primary_err
 
 
 def extract_for_case(
     case_id: int,
     mode: str | None = None,
     conn=None,
-    cache_dir: str = DEMO_CACHE_DIR,
-) -> int:
+    cache_dir: str | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
+    primary_provider: Provider | None = None,
+    fallback_provider: Provider | None = None,
+) -> RunResult:
     """Run full extraction and verification pipeline for a case.
 
     Partitions lines by label set, runs one extraction per label set,
-    stores claims/gaps, runs verification pipeline, and returns run_id.
+    stores claims/gaps, runs verification pipeline, and returns RunResult.
     """
     if conn is None:
         conn = db.get_conn()
@@ -256,6 +323,7 @@ def extract_for_case(
     mode = (mode or os.environ.get("LLM_MODE", "cache_only")).lower()
     provider_name = os.environ.get("LLM_PROVIDER", "gemini")
     model_name = os.environ.get("LLM_MODEL", "model-from-env")
+    effective_cache_dir = cache_dir or (DEMO_CACHE_DIR if case_id == 1 else RUNTIME_CACHE_DIR)
 
     run_id = db.insert_run(case_id, mode=mode, provider=provider_name, model=model_name)
 
@@ -270,6 +338,9 @@ def extract_for_case(
             (case_id,)
         ).fetchall()
 
+        if not all_lines:
+            raise ValueError("No sources uploaded for this case.")
+
         groups: dict[str, list[dict]] = {}
         for row in all_lines:
             labels = json.loads(row["labels"])
@@ -277,16 +348,25 @@ def extract_for_case(
             groups.setdefault(label_set_key, []).append(dict(row))
 
         call_label_sets: dict[str, set[str]] = {}
+        total_groups = len(groups)
 
-        for label_set_key, lines in groups.items():
+        for idx, (label_set_key, lines) in enumerate(groups.items(), start=1):
             call_labels = set(label_set_key.split(","))
             call_label_sets[label_set_key] = call_labels
+
+            if progress_callback:
+                try:
+                    progress_callback(f"Reading {idx} of {total_groups} label groups")
+                except TypeError:
+                    progress_callback(idx, total_groups, f"Reading {idx} of {total_groups} label groups")
 
             extraction = extract_for_label_set(
                 label_set=label_set_key,
                 lines=lines,
                 mode=mode,
-                cache_dir=cache_dir,
+                primary_provider=primary_provider,
+                fallback_provider=fallback_provider,
+                cache_dir=effective_cache_dir,
             )
 
             # Store claims
@@ -298,6 +378,7 @@ def extract_for_case(
                     flags["recurring"] = True
                 if claim_data.get("not_on_task_board"):
                     flags["untracked"] = True
+                flags["call_label_set"] = label_set_key
 
                 # Union claim's call label set with labels of cited lines
                 cited_lines = claim_data.get("cites", [])
@@ -342,9 +423,27 @@ def extract_for_case(
         from . import review
         review.match_prior_decisions(case_id, run_id, conn=conn)
 
+        claims_count = conn.execute("SELECT COUNT(*) as c FROM claims WHERE run_id = ?", (run_id,)).fetchone()["c"]
+        cited_lines_checked = conn.execute(
+            "SELECT COUNT(*) as c FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE run_id = ?)",
+            (run_id,)
+        ).fetchone()["c"]
+        conflicts_count = conn.execute("SELECT COUNT(*) as c FROM conflicts WHERE run_id = ?", (run_id,)).fetchone()["c"]
+        gaps_count = conn.execute("SELECT COUNT(*) as c FROM gaps WHERE run_id = ?", (run_id,)).fetchone()["c"]
+
         db.finish_run(run_id, status="done")
-        return run_id
+        return RunResult(run_id, claims_count, cited_lines_checked, conflicts_count, gaps_count)
 
     except Exception as e:
+        try:
+            conn.execute("DELETE FROM claim_cites WHERE claim_id IN (SELECT id FROM claims WHERE run_id = ?)", (run_id,))
+            conn.execute("DELETE FROM gap_cites WHERE gap_id IN (SELECT id FROM gaps WHERE run_id = ?)", (run_id,))
+            conn.execute("DELETE FROM claims WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM gaps WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM conflicts WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM dropped_claims WHERE run_id = ?", (run_id,))
+            conn.commit()
+        except Exception:
+            pass
         db.finish_run(run_id, status="failed", note=str(e))
         raise

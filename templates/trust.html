@@ -15,6 +15,11 @@
       <div class="counter-label">Planted strings found in views the role may not see</div>
       <p class="meta" style="margin-top:var(--s2)">{{ leak_scanned_summary }}. A strong check, not a proof.</p>
     </div>
+    {% if case and case.id != 1 %}
+    <div class="banner">
+      No accuracy figure exists for this case. Every claim is citation-checked by code and starts Pending.
+    </div>
+    {% else %}
     <table class="tbl">
       <thead><tr><th>Measure</th><th class="num">Result</th></tr></thead>
       <tbody>
@@ -32,6 +37,7 @@
         {% endif %}
       </tbody>
     </table>
+    {% endif %}
   </div>
 
   <p class="meta" style="margin-top:var(--s4)">A strong check, not a proof.</p>
@@ -68,9 +74,11 @@
     <form method="post" action="/trust/leak-test">
       <button class="btn" type="submit" hx-post="/trust/leak-test" hx-target="#leak-test-result" hx-swap="innerHTML">Run leak test</button>
     </form>
+    {% if not case or case.id == 1 %}
     <form method="post" action="/trust/eval">
       <button class="btn" type="submit" hx-post="/trust/eval" hx-target="#eval-result" hx-swap="innerHTML">Run accuracy check</button>
     </form>
+    {% endif %}
   </div>
 
   <div id="leak-test-result">
@@ -80,7 +88,7 @@
   </div>
 
   <div id="eval-result">
-    {% if last_eval_run %}
+    {% if last_eval_run and (not case or case.id == 1) %}
       {% include "_eval_result.html" %}
     {% endif %}
   </div>

@@ -28,7 +28,7 @@
       </p>
       {% endfor %}
     {% else %}
-      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+      <p class="meta" style="font-family:var(--sans);font-size:14px">No approved items in this section.</p>
     {% endif %}
 
     <h2>What is at risk</h2>
@@ -48,7 +48,7 @@
       </p>
       {% endfor %}
     {% else %}
-      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+      <p class="meta" style="font-family:var(--sans);font-size:14px">No approved items in this section.</p>
     {% endif %}
 
     <h2>What depends on what</h2>
@@ -64,7 +64,7 @@
       </p>
       {% endfor %}
     {% else %}
-      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+      <p class="meta" style="font-family:var(--sans);font-size:14px">No approved items in this section.</p>
     {% endif %}
 
     <h2>What is open</h2>
@@ -89,7 +89,7 @@
       </p>
       {% endfor %}
     {% else %}
-      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+      <p class="meta" style="font-family:var(--sans);font-size:14px">No approved items in this section.</p>
     {% endif %}
 
     <h2>What to do first</h2>
@@ -106,7 +106,7 @@
       </p>
       {% endfor %}
     {% else %}
-      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+      <p class="meta" style="font-family:var(--sans);font-size:14px">No approved items in this section.</p>
     {% endif %}
 
     <h2>Decisions and why</h2>
@@ -122,7 +122,7 @@
       </p>
       {% endfor %}
     {% else %}
-      <p class="meta" style="font-family:var(--sans);font-size:14px">None</p>
+      <p class="meta" style="font-family:var(--sans);font-size:14px">No approved items in this section.</p>
     {% endif %}
 
     {% set vis_history = sections.history|selectattr('visible')|list %}
@@ -140,7 +140,7 @@
     {% endif %}
 
     <footer class="print-footer" style="margin-top:var(--s8);padding-top:var(--s4);border-top:1px solid var(--rule)">
-      <p class="aside">Handover version {{ latest_version.n }}, approved by {{ latest_version.approved_by }}, {{ latest_version.approved_at[:16].replace('T', ' ') }}. Exported for {{ principal.name }}, {{ export_time }}.</p>
+      <p class="aside">Handover version {{ latest_version.n }}, approved by {{ latest_version.approved_by }}, {{ latest_version.approved_at[:16].replace('T', ' ') }} UTC. Exported for {{ principal.name }}, {{ export_time }} UTC.</p>
     </footer>
   </div>
 </div>

@@ -4,68 +4,91 @@
 {% block title %}Sources - Baton{% endblock %}
 
 {% block content %}
-<div style="padding-top:var(--s4);max-width:960px">
-  <div style="margin-bottom:var(--s6)">
-    <h1 class="h1">Sources</h1>
-    <p class="meta" style="margin-top:var(--s1)">Input documents for this handover case. Every claim must cite these sources.</p>
-  </div>
+<div id="ledger-container" class="{% if drawer_open %}main-with-drawer{% endif %}">
+  <div style="padding-top:var(--s4);max-width:960px">
+    <div style="margin-bottom:var(--s6)">
+      <h1 class="h1">Sources</h1>
+      <p class="meta" style="margin-top:var(--s1)">Input documents for this handover case. Every claim must cite these sources.</p>
+    </div>
 
-  {% if parse_error %}
-  <div class="banner" style="margin-bottom:var(--s6)">
-    {{ parse_error }}
-  </div>
-  {% endif %}
+    {% if parse_error %}
+    <div class="banner" style="margin-bottom:var(--s6)">
+      {{ parse_error }}
+    </div>
+    {% endif %}
 
-  <div style="overflow-x:auto;margin-bottom:var(--s8)">
-  <table class="tbl">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>File</th>
-        <th>Kind</th>
-        <th>Labels</th>
-        <th class="num">Lines</th>
-        <th>SHA</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in sources %}
-      <tr>
-        <td><span class="mono"><b>{{ s.id }}</b></span></td>
-        <td>{{ s.filename }}</td>
-        <td><span class="mono">{{ s.kind }}</span></td>
-        <td>
-          {% for l in s.labels %}
-          {{ m.tag(l, is_restricted=(l in ['finance', 'hr'])) }}
-          {% endfor %}
-        </td>
-        <td class="num">{{ s.line_count }}</td>
-        <td><span class="mono">{{ s.sha256[:8] if s.sha256 else '' }}</span></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
+    <div style="overflow-x:auto;margin-bottom:var(--s8)">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>File</th>
+          <th>Kind</th>
+          <th>Labels</th>
+          <th class="num">Lines</th>
+          {% if principal and principal.is_owner %}
+          <th class="num col-seen">Seen by</th>
+          {% endif %}
+          <th class="col-sha">SHA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sources %}
+        <tr>
+          <td><a class="cite" href="/case/{{ case.id if case else 1 }}/sources?open_source={{ s.id }}" hx-get="/case/{{ case.id if case else 1 }}/sources/{{ s.id }}/drawer" hx-target="#drawer-slot"><span class="mono"><b>{{ s.id }}</b></span></a></td>
+          <td><a href="/case/{{ case.id if case else 1 }}/sources?open_source={{ s.id }}" hx-get="/case/{{ case.id if case else 1 }}/sources/{{ s.id }}/drawer" hx-target="#drawer-slot" style="text-decoration:none;color:inherit">{{ s.filename }}</a></td>
+          <td><span class="mono">{{ s.kind }}</span></td>
+          <td>
+            {% for l in s.labels %}
+            {{ m.tag(l, is_restricted=(l in ['finance', 'hr'])) }}
+            {% endfor %}
+          </td>
+          <td class="num">{{ s.line_count }}</td>
+          {% if principal and principal.is_owner %}
+          <td class="num mono col-seen">{{ s.seen_by_count }} <span class="seen-word">{{ 'person' if s.seen_by_count == 1 else 'people' }}</span></td>
+          {% endif %}
+          <td class="col-sha"><span class="mono">{{ s.sha256[:8] if s.sha256 else '' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
 
-  {% if role in ['lead', 'approver'] %}
-  <div style="border-top:1px solid var(--ink);padding-top:var(--s6);max-width:480px">
-    <h2 class="h2" style="margin-bottom:var(--s4)">Upload source</h2>
-    <form method="post" action="/case/{{ case.id if case else 1 }}/sources" enctype="multipart/form-data">
-      <div style="margin-bottom:var(--s3)">
-        <label class="lbl" for="source_file">File</label>
-        <input class="field field--sm" type="file" id="source_file" name="file" required style="width:100%">
-      </div>
-      <div style="margin-bottom:var(--s4)">
-        <label class="lbl" for="source_label">Access Label</label>
-        <select class="field field--sm" id="source_label" name="label" style="width:100%">
-          <option value="team">Team</option>
-          <option value="finance">Finance</option>
-          <option value="hr">HR</option>
-        </select>
-      </div>
-      <button type="submit" class="btn btn--primary">Upload source</button>
-    </form>
+    {% if principal and principal.is_owner and not principal.is_demo %}
+    <div style="border-top:1px solid var(--ink);padding-top:var(--s6);max-width:480px">
+      <h2 class="h2" style="margin-bottom:var(--s2)">Upload source</h2>
+      <p class="meta" style="margin-bottom:var(--s4)">Limits: up to 5 sources per case, 200 KB per file, 1,500 non-blank lines per case. Plain text (.txt chat, .csv tasks, .md notes) in UTF-8 only. CSV files require a header row and at most 30 columns.</p>
+      <form method="post" action="/case/{{ case.id if case else 1 }}/sources" enctype="multipart/form-data">
+        <div style="margin-bottom:var(--s3)">
+          <label class="lbl" for="source_file">File</label>
+          <input class="field field--sm" type="file" id="source_file" name="file" required style="width:100%">
+        </div>
+        <div style="margin-bottom:var(--s4)">
+          <label class="lbl" for="source_label">Access Label</label>
+          <select class="field field--sm" id="source_label" name="label" style="width:100%">
+            <option value="team">Team</option>
+            <option value="finance">Finance</option>
+            <option value="hr">HR</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn--primary">Upload source</button>
+      </form>
+    </div>
+
+    <div style="border-top:1px solid var(--ink);margin-top:var(--s8);padding-top:var(--s6);max-width:540px">
+      <h2 class="h2" style="margin-bottom:var(--s2)">Build handover</h2>
+      <p class="meta" style="margin-bottom:var(--s4)">Run extraction and verification on uploaded sources. Each distinct access label set is extracted independently.</p>
+      {% include "_run_status.html" %}
+    </div>
+    {% endif %}
   </div>
+</div>
+
+<div id="drawer-slot">
+  {% if drawer_html %}
+    {{ drawer_html|safe }}
+  {% else %}
+    <div id="drawer"></div>
   {% endif %}
 </div>
 {% endblock %}
